@@ -104,7 +104,40 @@ class Prepuller(object):
     def _timeout_handler(self, signum, frame):
         self.logger.error(
             "Did not complete in %d s.  Terminating." % self.args.timeout)
+        self._destroy_pods(selective=False)
         raise RuntimeError("Timed out")
+
+    def _destroy_pods(self, selective=False):
+        """Get a pod list and delete any that are still running if
+        selective is False, or any in state "Succeeded" or "Failed"
+        if selective is True.
+        """
+        self.logger.debug("Looking for pods to delete.")
+        cleanup = self._get_deletion_list(selective=selective)
+        for podname in cleanup:
+            self.delete_pod(podname)
+
+    def _get_deletion_list(self, selective=True):
+        cleanup = []
+        speclist = []
+        v1 = self.client
+        for x in self.pod_specs:
+            speclist.extend(self.pod_specs[x])
+        specnames = [self._derive_pod_name(x) for x in speclist]
+        podlist = v1.list_namespaced_pod(self.namespace)
+        for pod in podlist.items:
+            podname = pod.metadata.name
+            phase = pod.status.phase
+            if podname in specnames:
+                if selective:
+                    if (phase != "Succeeded" and phase != "Failed"):
+                        self.logger.debug("Pod '%s' %s; not cleaning."
+                                          % (podname, phase))
+                        continue
+                self.logger.debug(
+                    "Pod '%s' %s; adding to cleanup." % (podname, phase))
+                cleanup.append(podname)
+        return cleanup
 
     def update_images_from_repo(self):
         """Scan the repo looking for images.
@@ -202,27 +235,9 @@ class Prepuller(object):
 
     def clean_completed_pods(self):
         """Get a pod list and delete any that are in the speclist and have
-        already run to completion.  This is useful for pods that are
-        left stranded by a timeout.
+        already run to completion.
         """
-        v1 = self.client
-        self.logger.debug("Looking for completed pods to delete.")
-        cleanup = []
-        speclist = []
-        for x in self.pod_specs:
-            speclist.extend(self.pod_specs[x])
-        specnames = [self._derive_pod_name(x) for x in speclist]
-        podlist = v1.list_namespaced_pod(self.namespace)
-        for pod in podlist.items:
-            podname = pod.metadata.name
-            phase = pod.status.phase
-            if (podname in specnames and
-                    (phase == "Succeeded" or phase == "Failed")):
-                self.logger.debug(
-                    "Pod '%s' %s; adding to cleanup." % (podname, phase))
-                cleanup.append(podname)
-        for podname in cleanup:
-            self.delete_pod(podname)
+        self._destroy_pods(selective=True)
 
     def start_single_pod(self, spec):
         """Run a pod, with a single container, on a particular node.
