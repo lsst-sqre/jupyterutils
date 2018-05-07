@@ -24,6 +24,7 @@ class ScanRepo(object):
     dailies = 3
     weeklies = 2
     releases = 1
+    _all_tags = []
     logger = None
 
     def __init__(self, host='', path='', owner='', name='',
@@ -122,6 +123,10 @@ class ScanRepo(object):
         """Return the tag data"""
         return self.data
 
+    def get_all_tags(self):
+        """Return all tags in the repository."""
+        return self._all_tags
+
     def _get_url(self, **kwargs):
         params = None
         resp = None
@@ -159,6 +164,7 @@ class ScanRepo(object):
             if "next" not in j or not j["next"]:
                 break
             page = page + 1
+        self._all_tags = [x["name"] for x in results]
         self._reduce_results(results)
 
     def _reduce_results(self, results):
