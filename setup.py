@@ -27,7 +27,7 @@ def local_read(filename):
 
 
 NAME = 'jupyterutils'
-DESCRIPTION = 'LSST utilites for Jupyter environment'
+DESCRIPTION = 'LSST utilites for Jupyter server environment'
 LONG_DESCRIPTION = local_read("README.md")
 VERSION = get_version('%s/_version.py' % NAME)
 AUTHOR = 'Adam Thornton'
@@ -54,7 +54,6 @@ setuptools.setup(
     install_requires=[
         'requests>=2.0.0,<3.0.0',
         'kubernetes>=4.0.0,<6.0.0',
-        'bokeh>=0.12.15'
     ],
     entry_points={
         'console_scripts': [

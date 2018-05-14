@@ -1,1 +1,1 @@
-# Utilities for SQuaRE JupyterLab
+# Utilities for SQuaRE Jupyter Server Environment
