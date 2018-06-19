@@ -53,7 +53,7 @@ setuptools.setup(
     keywords='lsst',
     install_requires=[
         'requests>=2.0.0,<3.0.0',
-        'kubernetes>=4.0.0,<6.0.0',
+        'kubernetes>=4.0.0,<7.0.0',
     ],
     entry_points={
         'console_scripts': [
