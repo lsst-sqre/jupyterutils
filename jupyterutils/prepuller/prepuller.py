@@ -72,7 +72,7 @@ class Prepuller(object):
         if self.args.namespace:
             namespace = self.args.namespace
         if not namespace:
-            namespace = os.getenv('JLD_NAMESPACE')
+            namespace = os.getenv('PREPULLER_NAMESPACE')
         if not namespace:
             self.logger.warning("Using kubernetes namespace 'default'")
             namespace = "default"
