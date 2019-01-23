@@ -8,7 +8,7 @@ import time
 from threading import Thread
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
-from jupyterutils.scanrepo import ScanRepo
+from jupyterhubutils.scanrepo import ScanRepo
 
 
 class Prepuller(object):

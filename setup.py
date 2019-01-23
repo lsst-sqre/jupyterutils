@@ -1,5 +1,5 @@
 """
-Setup Module for LSST Jupyter Utilities
+Setup Module for LSST Jupyter Hub Utilities
 """
 import codecs
 import io
@@ -26,13 +26,13 @@ def local_read(filename):
     return codecs.open(full_filename, 'r', 'utf-8').read()
 
 
-NAME = 'jupyterutils'
-DESCRIPTION = 'LSST utilites for Jupyter server environment'
+NAME = 'jupyterhubutils'
+DESCRIPTION = 'LSST utilites for Jupyter Hub server environment'
 LONG_DESCRIPTION = local_read("README.md")
 VERSION = get_version('%s/_version.py' % NAME)
 AUTHOR = 'Adam Thornton'
 AUTHOR_EMAIL = 'athornton@lsst.org'
-URL = 'https://github.com/sqre-lsst/jupyterutils'
+URL = 'https://github.com/sqre-lsst/jupyterhubutils'
 LICENSE = 'MIT'
 
 setuptools.setup(
@@ -53,12 +53,12 @@ setuptools.setup(
     keywords='lsst',
     install_requires=[
         'requests>=2.0.0,<3.0.0',
-        'kubernetes>=4.0.0,<7.0.0',
+        'kubernetes>=4.0.0,<9.0.0',
     ],
     entry_points={
         'console_scripts': [
-            'prepuller = jupyterutils.prepuller:standalone',
-            'scanrepo = jupyterutils.scanrepo:standalone'
+            'prepuller = jupyterhubutils.prepuller:standalone',
+            'scanrepo = jupyterhubutils.scanrepo:standalone'
         ]
     }
 )
