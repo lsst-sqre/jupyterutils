@@ -20,7 +20,7 @@ class ScanRepo(object):
     debug = False
     json = False
     insecure = False
-    sort_field = "comp_ts"
+    sort_field = "name"
     dailies = 3
     weeklies = 2
     releases = 1
@@ -88,7 +88,8 @@ class ScanRepo(object):
             cs.extend(self.data[k])
         ldescs = []
         for c in cs:
-            tag = c["name"].split(":")[-1]
+            print("C: %r" % c)
+            tag = c["name"]
             if tag[0] == "r":
                 rmaj = tag[1:3]
                 rmin = tag[3:]

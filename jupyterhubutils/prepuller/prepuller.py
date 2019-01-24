@@ -21,19 +21,20 @@ class Prepuller(object):
                               json=True,
                               repo=None,
                               owner="lsstsqre",
-                              name="jld-lab",
+                              name="sciplat-lab",
                               port=None,
                               dailies=3,
                               weeklies=2,
                               releases=1,
                               insecure=False,
-                              sort="comp_ts",
+                              sort="name",
                               list=None,
                               command=["/bin/sh",
                                        "-c",
                                        "echo Prepuller run for $(hostname)" +
                                        "complete at $(date)."],
-                              path="/v2/repositories/lsstsqre/jld-lab/tags/",
+                              path=("/v2/repositories/lsstsqre/" +
+                                    "sciplat-lab/tags/"),
                               no_scan=False,
                               namespace=None,
                               timeout=3300
