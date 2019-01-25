@@ -88,7 +88,6 @@ class ScanRepo(object):
             cs.extend(self.data[k])
         ldescs = []
         for c in cs:
-            print("C: %r" % c)
             tag = c["name"]
             if tag[0] == "r":
                 rmaj = tag[1:3]
