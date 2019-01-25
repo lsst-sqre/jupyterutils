@@ -32,8 +32,8 @@ def parse_args():
                         help="repository owner [lsstsqre]",
                         default="lsstsqre")
     parser.add_argument("-n", "--name",
-                        help="repository name [jld-lab]",
-                        default="jld-lab")
+                        help="repository name [sciplat-lab]",
+                        default="sciplat-lab")
     parser.add_argument("-q", "--dailies", "--daily", "--quotidian", type=int,
                         help="# of daily builds to keep [3]",
                         default=3)
@@ -54,8 +54,8 @@ def parse_args():
                         " secure, 80 for insecure]",
                         default=None)
     parser.add_argument("-s", "--sort", "--sort-field", "--sort-by",
-                        help="Field to sort results by [comp_ts]",
-                        default="comp_ts")
+                        help="Field to sort results by [name]",
+                        default="name")
     parser.add_argument("-j", "--json", help="Emit results as JSON, " +
                         " not sourceable shell fragment [False]",
                         action='store_true',
