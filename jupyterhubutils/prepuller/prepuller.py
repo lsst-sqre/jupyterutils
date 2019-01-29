@@ -215,8 +215,8 @@ class Prepuller(object):
         if not os.getenv("RESTRICT_LAB_NODES"):
             logger.debug("Lab nodes are not restricted.")
             return False
-        labels = node.metadata.get('labels')
-        name = node.metadata.get('name') or 'Node Name Unknown'
+        labels = node.metadata.labels
+        name = node.metadata.name or 'Node Name Unknown'
         if not labels:
             logger.debug("Nodes are not labelled.")
             return False
