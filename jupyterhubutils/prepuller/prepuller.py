@@ -183,7 +183,8 @@ class Prepuller(object):
             self.images = current_imgs
 
     def build_nodelist(self):
-        """Make a list of all schedulable nodes.
+        """Make a list of all schedulable nodes, respecting RESTRICT_*
+        environment variables.
         """
         v1 = self.client
         logger = self.logger
@@ -198,9 +199,43 @@ class Prepuller(object):
                 taints = [x.effect for x in spec.taints]
                 if "NoSchedule" in taints:
                     continue
+            skip = False
+            if self.reject_by_label(thing):
+                continue
             nodes.append(thing.metadata.name)
         logger.debug("Schedulable list: %s" % str(nodes))
         self.nodes = nodes
+
+    def reject_by_label(self, node):
+        """If node labels are set to restrict Lab spawn, reject nodes that
+        are not suitable for Lab/Dask.
+        """
+        logger = self.logger
+        logger.debug("Checking for node labels.")
+        if not os.getenv("RESTRICT_LAB_NODES"):
+            logger.debug("Lab nodes are not restricted.")
+            return False
+        labels = node.metadata.labels
+        name = node.metadata.name or 'Node Name Unknown'
+        if not labels:
+            logger.debug("Nodes are not labelled.")
+            return False
+        lab_ok = labels.get("jupyterlab")
+        if lab_ok and lab_ok == "ok":
+            logger.debug("Node '%s' is allowed for Lab usage." % name)
+            return False
+        if not os.getenv("ALLOW_DASK_SPAWN"):
+            logger.debug("Lab spawn not allowed for node '%s'." % name)
+            return True
+        if not os.getenv("RESTRICT_DASK_NODES"):
+            logger.debug("Dask allowed and unrestricted.")
+            return False
+        dask_ok = labels.get("dask")
+        if dask_ok and dask_ok == "ok":
+            logger.debug("Node '%s' is allowed for Dask usage." % name)
+            return False
+        logger.debug("Lab/Dask spawn not allowed for node '%s'" % name)
+        return True
 
     def build_pod_specs(self):
         """Build a dict of Pod specs by node, each node having a list of
