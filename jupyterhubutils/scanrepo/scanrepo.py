@@ -1,3 +1,4 @@
+import copy
 import datetime
 import json
 import logging
@@ -109,7 +110,12 @@ class ScanRepo(object):
     def report(self):
         """Print the tag data"""
         if self.json:
-            print(json.dumps(self.data, sort_keys=True, indent=4))
+            rdata = copy.deepcopy(self.data)
+            for kind in rdata:
+                for entry in rdata[kind]:
+                    dt = entry["updated"]
+                    entry["updated"] = dt.isoformat()
+            print(json.dumps(rdata, sort_keys=True, indent=4))
         else:
             ls, ldescs = self.extract_image_info()
             ldstr = ",".join(ldescs)
@@ -164,35 +170,86 @@ class ScanRepo(object):
             if "next" not in j or not j["next"]:
                 break
             page = page + 1
-        self._all_tags = [x["name"] for x in results]
         self._reduce_results(results)
 
     def _reduce_results(self, results):
         sort_field = self.sort_field
+        # Release/Weekly/Daily
+        # Experimental/Latest/Other
         r_candidates = []
         w_candidates = []
         d_candidates = []
+        e_candidates = []
+        l_candidates = []
+        o_candidates = []
+        # This is the order for tags to appear in menu:
+        displayorder = [d_candidates, w_candidates, r_candidates]
+        # This is the order for tags to appear in drop-down:
+        imgorder = [l_candidates, e_candidates]
+        imgorder.extend(displayorder)
+        imgorder.extend(o_candidates)
+        reduced_results = {}
         for res in results:
             vname = res["name"]
-            fc = vname[0]
-            res["comp_ts"] = self._convert_time(res["last_updated"])
+            reduced_results[vname] = {
+                "name": vname,
+                "id": res["id"],
+                "size": res["full_size"],
+                "updated": self._convert_time(res["last_updated"])
+            }
+        for res in reduced_results:
+            fc = res[0]
             if fc == "r":
-                r_candidates.append(res)
-            if fc == "w":
-                w_candidates.append(res)
-            if fc == "d":
-                d_candidates.append(res)
-        r_candidates.sort(key=lambda x: x[sort_field], reverse=True)
-        w_candidates.sort(key=lambda x: x[sort_field], reverse=True)
-        d_candidates.sort(key=lambda x: x[sort_field], reverse=True)
+                r_candidates.append(reduced_results[res])
+            elif fc == "w":
+                w_candidates.append(reduced_results[res])
+            elif fc == "d":
+                d_candidates.append(reduced_results[res])
+            elif res[:3] == "exp":
+                e_candidates.append(reduced_results[res])
+            elif res[:6] == "latest":
+                l_candidates.append(reduced_results[res])
+            else:
+                o_candidates.append(res)
+        for clist in imgorder:
+            clist.sort(key=lambda x: x[sort_field], reverse=True)
+        if sort_field == 'name':
+            r_candidates=self._sort_releases_by_name(r_candidates)
         r = {}
-        r["daily"] = d_candidates[:self.dailies]
-        r["weekly"] = w_candidates[:self.weeklies]
-        r["release"] = r_candidates[:self.releases]
-        for tp in r:
-            for v in r[tp]:
-                del(v["comp_ts"])
+        # Index corresponds to order in displayorder
+        imap = {"daily": {"index": 0,
+                          "count": self.dailies},
+                "weekly": {"index": 1,
+                           "count": self.weeklies},
+                "release": {"index": 2,
+                            "count": self.releases}
+                }
+        for ikey in list(imap.keys()):
+            idx = imap[ikey]["index"]
+            ict = imap[ikey]["count"]
+            r[ikey] = displayorder[idx][:ict]
+        all_tags = []
+        for clist in imgorder:
+            all_tags.extend(x["name"] for x in clist)
         self.data = r
+        self._all_tags = all_tags
+
+    def _sort_releases_by_name(self, r_candidates):
+        # rXYZrc2 should *precede* rXYZ
+        # We're going to decorate short (that is, no rc tag) release names
+        #  with "zzz", re-sort, and then undecorate.
+        nm = {}
+        for c in r_candidates:
+            tag = c["name"]
+            if len(tag) == 4:
+                xtag = tag+"zzz"
+                nm[xtag] = tag
+                c["name"] = xtag
+        r_candidates.sort(key=lambda x: x["name"], reverse=True)
+        for c in r_candidates:
+            xtag = c["name"]
+            c["name"] = nm[xtag]
+        return r_candidates
 
     def _convert_time(self, ts):
         f = '%Y-%m-%dT%H:%M:%S.%f%Z'
