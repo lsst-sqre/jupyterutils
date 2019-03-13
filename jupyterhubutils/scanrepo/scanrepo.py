@@ -1,9 +1,11 @@
 import copy
 import datetime
+import functools
 import json
 import logging
 import urllib.parse
 import urllib.request
+import semver
 
 
 class ScanRepo(object):
@@ -90,19 +92,49 @@ class ScanRepo(object):
         ldescs = []
         for c in cs:
             tag = c["name"]
-            if tag[0] == "r":
-                rmaj = tag[1:3]
-                rmin = tag[3:]
-                ld = "Release %s.%s" % (rmaj, rmin)
-            elif tag[0] == "w":
-                year = tag[1:5]
-                week = tag[5:]
-                ld = "Weekly %s_%s" % (year, week)
-            elif tag[0] == "d":
-                year = tag[1:5]
-                month = tag[5:7]
-                day = tag[7:]
-                ld = "Daily %s_%s_%s" % (year, month, day)
+            # New-style tags have underscores separating components.
+            components = None
+            if tag.find('_') != -1:
+                components = tag.split('_')
+            if components:
+                btype = components[0]
+                if btype == "r":
+                    rmaj = components[1]
+                    rmin = components[2]
+                    rpatch = None
+                    rrest = None
+                    if len(components) > 3:
+                        rpatch = components[3]
+                    if len(components) > 4:
+                        rrest = "_".join(components[4:])
+                    ld = "Release %s.%s" % (rmaj, rmin)
+                    if rpatch:
+                        ld = ld + "." + rpatch
+                    if rrest:
+                        ld = ld + "." + rrest
+                elif btype == "w":
+                    year = components[1]
+                    week = components[2]
+                    ld = "Weekly %s_%s" % (year, week)
+                elif btype == "d":
+                    year = components[1]
+                    month = components[2]
+                    day = components[3]
+                    ld = "Daily %s_%s_%s" % (year, month, day)
+            else:
+                if tag[0] == "r":
+                    rmaj = tag[1:3]
+                    rmin = tag[3:]
+                    ld = "Release %s.%s" % (rmaj, rmin)
+                elif tag[0] == "w":
+                    year = tag[1:5]
+                    week = tag[5:]
+                    ld = "Weekly %s_%s" % (year, week)
+                elif tag[0] == "d":
+                    year = tag[1:5]
+                    month = tag[5:7]
+                    day = tag[7:]
+                    ld = "Daily %s_%s_%s" % (year, month, day)
             ldescs.append(ld)
         ls = [self.owner + "/" + self.name + ":" + x["name"] for x in cs]
         return ls, ldescs
@@ -198,23 +230,23 @@ class ScanRepo(object):
                 "updated": self._convert_time(res["last_updated"])
             }
         for res in reduced_results:
-            fc = res[0]
-            if fc == "r":
+            if res.startswith("r"):
                 r_candidates.append(reduced_results[res])
-            elif fc == "w":
+            elif res.startswith("w"):
                 w_candidates.append(reduced_results[res])
-            elif fc == "d":
+            elif res.startswith("d"):
                 d_candidates.append(reduced_results[res])
-            elif res[:3] == "exp":
+            elif res.startswith("exp"):
                 e_candidates.append(reduced_results[res])
-            elif res[:6] == "latest":
+            elif res.startswith("latest"):
                 l_candidates.append(reduced_results[res])
             else:
                 o_candidates.append(res)
         for clist in imgorder:
-            clist.sort(key=lambda x: x[sort_field], reverse=True)
-        if sort_field == 'name':
-            r_candidates=self._sort_releases_by_name(r_candidates)
+            if sort_field != 'name':
+                clist.sort(key=lambda x: x[sort_field], reverse=True)
+            else:
+                clist = self._sort_images_by_name(clist)
         r = {}
         # Index corresponds to order in displayorder
         imap = {"daily": {"index": 0,
@@ -233,6 +265,46 @@ class ScanRepo(object):
             all_tags.extend(x["name"] for x in clist)
         self.data = r
         self._all_tags = all_tags
+
+    def _sort_images_by_name(self, clist):
+        # We have a flag day where we start putting underscores into
+        #  image tags.  Those always go at the top.
+        # We begin by splitting the list of candidate images into new
+        #  and old style images.
+        oldstyle = []
+        newstyle = []
+        for cimg in clist:
+            name = cimg["name"]
+            if name.find("_") == -1:
+                oldstyle.append(cimg)
+            else:
+                # "latest_X" is not a semantic version tag.
+                if name.startswith("latest_"):
+                    oldstyle.append(cimg)
+                else:
+                    newstyle.append(cimg)
+        self.logger.debug("Oldstyle: %r" % oldstyle)
+        self.logger.debug("Newstyle: %r" % newstyle)
+        # Old-style sort is simple string comparison.
+        oldstyle.sort(key=lambda x: x["name"], reverse=True)
+        # New style, we refer to semver module for comparison.
+        #  (also works fine for date sorts)
+        seml = []
+        for cimg in newstyle:
+            name = cimg["name"]
+            components = name.split("_")
+
+            # First character is image type, not semantically significant
+            #  for versioning.
+            cimg["semver"] = semver.format_version(components[1:])
+            seml.append(cimg["semver"])
+        seml.sort(key=functools.cmp_to_key(semver.compare), reverse=True)
+        sorted_newstyle = []
+        for skey in seml:
+            sorted_newstyle.extend([x for x in newstyle if (
+                newstyle["semver"] == skey)])
+        # Return all new style names first.
+        return sorted_newstyle.extend(oldstyle)
 
     def _sort_releases_by_name(self, r_candidates):
         # rXYZrc2 should *precede* rXYZ
