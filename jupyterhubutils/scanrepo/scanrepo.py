@@ -296,13 +296,32 @@ class ScanRepo(object):
 
             # First character is image type, not semantically significant
             #  for versioning.
-            cimg["semver"] = semver.format_version(components[1:])
+            major = 0
+            if len(components) > 1:
+                major = int(components[1])
+            minor = 0
+            if len(components) > 2:
+                minor = int(components[2])
+            patch = 0
+            if len(components) > 3:
+                patch = int(components[3])
+            prerelease = None
+            if len(components) > 4:
+                prerelease = components[4]
+            build = None
+            if len(components) > 5:
+                build = '_'.join(components[5:])
+            cimg["semver"] = semver.format_version(
+                major, minor, patch, prerelease, build)
             seml.append(cimg["semver"])
         seml.sort(key=functools.cmp_to_key(semver.compare), reverse=True)
+        self.logger.debug(seml)
         sorted_newstyle = []
         for skey in seml:
-            sorted_newstyle.extend([x for x in newstyle if (
-                newstyle["semver"] == skey)])
+            for ni in newstyle:
+                if ni["semver"] == skey:
+                    sorted_newstyle.append(ni)
+                    break
         # Return all new style names first.
         return sorted_newstyle.extend(oldstyle)
 
