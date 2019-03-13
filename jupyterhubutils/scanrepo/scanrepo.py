@@ -3,6 +3,7 @@ import datetime
 import functools
 import json
 import logging
+import re
 import urllib.parse
 import urllib.request
 import semver
@@ -98,6 +99,12 @@ class ScanRepo(object):
                 components = tag.split('_')
             if components:
                 btype = components[0]
+                # Handle the r17_0_1 case.
+                ctm = re.search(r'\d+$', btype)
+                if ctm is not None:
+                    mj = int(ctm.group())
+                    components.insert(1, mj)
+                    btype = btype[0]
                 if btype == "r":
                     rmaj = components[1]
                     rmin = components[2]
@@ -111,7 +118,7 @@ class ScanRepo(object):
                     if rpatch:
                         ld = ld + "." + rpatch
                     if rrest:
-                        ld = ld + "." + rrest
+                        ld = ld + "-" + rrest
                 elif btype == "w":
                     year = components[1]
                     week = components[2]
@@ -283,8 +290,6 @@ class ScanRepo(object):
                     oldstyle.append(cimg)
                 else:
                     newstyle.append(cimg)
-        self.logger.debug("Oldstyle: %r" % oldstyle)
-        self.logger.debug("Newstyle: %r" % newstyle)
         # Old-style sort is simple string comparison.
         oldstyle.sort(key=lambda x: x["name"], reverse=True)
         # New style, we refer to semver module for comparison.
@@ -293,7 +298,15 @@ class ScanRepo(object):
         for cimg in newstyle:
             name = cimg["name"]
             components = name.split("_")
-
+            # Get this.  It's not represented as r_17, no, it's r17.
+            # So if we find that the end of the first group is digits,
+            #  we split those off with a regular expression, and insert
+            #  them into the list where the major number should be.
+            ctype = components[0]
+            ctm = re.search(r'\d+$', ctype)
+            if ctm is not None:
+                mj = int(ctm.group())
+                components.insert(1, mj)
             # First character is image type, not semantically significant
             #  for versioning.
             major = 0
@@ -315,7 +328,6 @@ class ScanRepo(object):
                 major, minor, patch, prerelease, build)
             seml.append(cimg["semver"])
         seml.sort(key=functools.cmp_to_key(semver.compare), reverse=True)
-        self.logger.debug(seml)
         sorted_newstyle = []
         for skey in seml:
             for ni in newstyle:
