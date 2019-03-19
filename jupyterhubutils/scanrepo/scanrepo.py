@@ -309,6 +309,8 @@ class ScanRepo(object):
                 components.insert(1, mj)
             # First character is image type, not semantically significant
             #  for versioning.
+            if components[0] == "exp":
+                _ = components.pop(0)
             major = 0
             if len(components) > 1:
                 major = int(components[1])

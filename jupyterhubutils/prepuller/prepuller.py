@@ -1,4 +1,6 @@
 import argparse
+import copy
+import datetime
 import json
 import logging
 import os
@@ -160,9 +162,15 @@ class Prepuller(object):
             else:
                 self.logger.debug("Scanning Docker repo for images")
             self.repo.scan()
-            self.logger.debug("Scan Data: %s" % json.dumps(self.repo.data,
-                                                           sort_keys=True,
-                                                           indent=4))
+            if self.repo.debug:
+                repocopy = copy.deepcopy(self.repo.data)
+                for itype in repocopy:
+                    for item in repocopy[itype]:
+                        uddt = item["updated"]
+                        item["updated"] = uddt.isoformat()
+                self.logger.debug("Scan Data: %s" % json.dumps(repocopy,
+                                                               sort_keys=True,
+                                                               indent=4))
             scan_imgs = []
             for section in ["daily", "weekly", "release"]:
                 for entry in self.repo.data[section]:
