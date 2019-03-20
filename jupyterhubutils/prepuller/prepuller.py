@@ -275,6 +275,7 @@ class Prepuller(object):
     def _podname_from_image(self, img):
         iname = '-'.join(img.split('/')[-2:])
         iname = iname.replace(':', '-')
+        iname = iname.replace('_', '-')
         return iname
 
     def clean_completed_pods(self):
