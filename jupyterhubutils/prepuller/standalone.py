@@ -62,9 +62,14 @@ def parse_args():
                               "(-1 for no timeout) [3300]"),
                         type=int,
                         default=3300)
-    parser.add_argument("--namespace", help="Kubernetes namespace [namespace" +
-                        " of container, or 'default' if not run inside" +
-                        " kubernetes]")
+    parser.add_argument("-u", "--uid",
+                        help=("UID to run as [769]"),
+                        type=int,
+                        default=769)
+    parser.add_argument("--namespace",
+                        help=("Kubernetes namespace [namespace" +
+                              " of container, or 'default' if not run " +
+                              " inside kubernetes]"))
     results = parser.parse_args()
     results.path = ("/v2/repositories/" + results.owner + "/" +
                     results.name + "/tags/")

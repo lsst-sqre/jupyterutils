@@ -53,7 +53,7 @@ setuptools.setup(
     keywords='lsst',
     install_requires=[
         'requests>=2.0.0,<3.0.0',
-        'kubernetes>=4.0.0,<9.0.0',
+        'kubernetes>=9.0.0,<11.0.0',
         'semver>=2.0.0,<3.0.0'
     ],
     entry_points={
