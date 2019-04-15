@@ -1,6 +1,5 @@
 import argparse
 import copy
-import datetime
 import json
 import logging
 import os
@@ -39,7 +38,8 @@ class Prepuller(object):
                                     "sciplat-lab/tags/"),
                               no_scan=False,
                               namespace=None,
-                              timeout=3300
+                              timeout=3300,
+                              uid=769
                               )
     images = []
     nodes = []
@@ -69,7 +69,8 @@ class Prepuller(object):
             try:
                 config.load_kube_config()
             except Exception:
-                self.logger.critical(sys.argv[0], " must be run from a system",
+                self.logger.critical(sys.argv[0],
+                                     " must be run from a system",
                                      " with k8s API access.")
                 raise
         if self.args.namespace:
@@ -158,7 +159,7 @@ class Prepuller(object):
                                  debug=self.args.debug)
         if not self.args.no_scan:
             if self.args.repo:
-                self.logger.debug("Scanning '%s' for images" % self.args.repo)
+                self.logger.debug("Scanning images: '%s' " % self.args.repo)
             else:
                 self.logger.debug("Scanning Docker repo for images")
             self.repo.scan()
@@ -168,9 +169,10 @@ class Prepuller(object):
                     for item in repocopy[itype]:
                         uddt = item["updated"]
                         item["updated"] = uddt.isoformat()
-                self.logger.debug("Scan Data: %s" % json.dumps(repocopy,
-                                                               sort_keys=True,
-                                                               indent=4))
+                self.logger.debug("Scan Data: " +
+                                  json.dumps(repocopy,
+                                             sort_keys=True,
+                                             indent=4))
             scan_imgs = []
             for section in ["daily", "weekly", "release"]:
                 for entry in self.repo.data[section]:
@@ -264,7 +266,9 @@ class Prepuller(object):
                     command=self.command,
                     image=img,
                     image_pull_policy="Always",
-                    name=self._podname_from_image(img)
+                    name=self._podname_from_image(img),
+                    security_context=client.V1PodSecurityContext(
+                        run_as_user=self.uid)
                 )
             ],
             restart_policy="Never",
@@ -369,5 +373,4 @@ class Prepuller(object):
         """
         v1 = self.client
         self.logger.debug("Deleting pod %s" % podname)
-        v1.delete_namespaced_pod(
-            podname, self.namespace, client.V1DeleteOptions())
+        v1.delete_namespaced_pod(podname, self.namespace)
