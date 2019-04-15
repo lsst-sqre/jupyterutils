@@ -268,7 +268,7 @@ class Prepuller(object):
                     image_pull_policy="Always",
                     name=self._podname_from_image(img),
                     security_context=client.V1PodSecurityContext(
-                        run_as_user=self.uid)
+                        run_as_user=self.args.uid)
                 )
             ],
             restart_policy="Never",
