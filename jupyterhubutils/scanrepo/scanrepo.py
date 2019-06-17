@@ -108,7 +108,9 @@ class ScanRepo(object):
                     mj = int(ctm.group())
                     components.insert(1, mj)
                     btype = btype[0]
-                if btype == "r":
+                if tag.startswith("recommended"):
+                    ld = "R" + tag[1:]
+                elif btype == "r":
                     rmaj = components[1]
                     rmin = components[2]
                     rpatch = None
@@ -132,7 +134,9 @@ class ScanRepo(object):
                     day = components[3]
                     ld = "Daily %s_%s_%s" % (year, month, day)
             else:
-                if tag[0] == "r":
+                if tag.startswith("recommended"):
+                    ld = "R" + tag[1:]
+                elif tag[0] == "r":
                     rmaj = tag[1:3]
                     rmin = tag[3:]
                     ld = "Release %s.%s" % (rmaj, rmin)
