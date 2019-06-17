@@ -12,6 +12,7 @@ def standalone():
                        dailies=args.dailies,
                        weeklies=args.weeklies,
                        releases=args.releases,
+                       recommended=args.recommended,
                        json=args.json,
                        insecure=args.insecure,
                        sort_field=args.sort,
@@ -43,6 +44,9 @@ def parse_args():
     parser.add_argument("-b", "--releases", "--release", type=int,
                         help="# of release builds to keep [1]",
                         default=1)
+    parser.add_argument("-c", "--recommended", type=bool,
+                        help="select 'recommended' tag [True]",
+                        default=True)
     parser.add_argument("-i", "--insecure", "--no-tls", "--no-ssl",
                         help="Do not use TLS to connect [False]",
                         action='store_true',
