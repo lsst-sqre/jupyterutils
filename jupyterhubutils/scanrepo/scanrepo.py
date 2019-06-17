@@ -28,16 +28,17 @@ class ScanRepo(object):
     dailies = 3
     weeklies = 2
     releases = 1
+    recommended = True
     _all_tags = []
     logger = None
 
     def __init__(self, host='', path='', owner='', name='',
                  dailies=3, weeklies=2, releases=1,
+                 recommended=True,
                  json=False, port=None,
                  insecure=False, sort_field="", debug=False):
         logging.basicConfig()
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
         self.logger.setLevel(logging.INFO)
         if host:
             self.host = host
@@ -88,6 +89,8 @@ class ScanRepo(object):
     def extract_image_info(self):
         """Build image name list and image description list"""
         cs = []
+        if (self.recommended and "recommended" in self.data):
+            cs.extend(self.data["recommended"])
         for k in ["daily", "weekly", "release"]:
             cs.extend(self.data[k])
         ldescs = []
@@ -105,7 +108,9 @@ class ScanRepo(object):
                     mj = int(ctm.group())
                     components.insert(1, mj)
                     btype = btype[0]
-                if btype == "r":
+                if tag.startswith("recommended"):
+                    ld = "R" + tag[1:]
+                elif btype == "r":
                     rmaj = components[1]
                     rmin = components[2]
                     rpatch = None
@@ -129,7 +134,9 @@ class ScanRepo(object):
                     day = components[3]
                     ld = "Daily %s_%s_%s" % (year, month, day)
             else:
-                if tag[0] == "r":
+                if tag.startswith("recommended"):
+                    ld = "R" + tag[1:]
+                elif tag[0] == "r":
                     rmaj = tag[1:3]
                     rmin = tag[3:]
                     ld = "Release %s.%s" % (rmaj, rmin)
@@ -213,8 +220,10 @@ class ScanRepo(object):
 
     def _reduce_results(self, results):
         sort_field = self.sort_field
+        # Recommended
         # Release/Weekly/Daily
         # Experimental/Latest/Other
+        c_candidates = []
         r_candidates = []
         w_candidates = []
         d_candidates = []
@@ -222,7 +231,10 @@ class ScanRepo(object):
         l_candidates = []
         o_candidates = []
         # This is the order for tags to appear in menu:
-        displayorder = [d_candidates, w_candidates, r_candidates]
+        displayorder = []
+        if self.recommended:
+            displayorder.extend([c_candidates])
+        displayorder.extend([d_candidates, w_candidates, r_candidates])
         # This is the order for tags to appear in drop-down:
         imgorder = [l_candidates, e_candidates]
         imgorder.extend(displayorder)
@@ -237,7 +249,7 @@ class ScanRepo(object):
                 "updated": self._convert_time(res["last_updated"])
             }
         for res in reduced_results:
-            if res.startswith("r"):
+            if res.startswith("r") and not res.startswith("recommended"):
                 r_candidates.append(reduced_results[res])
             elif res.startswith("w"):
                 w_candidates.append(reduced_results[res])
@@ -247,6 +259,8 @@ class ScanRepo(object):
                 e_candidates.append(reduced_results[res])
             elif res.startswith("latest"):
                 l_candidates.append(reduced_results[res])
+            elif res.startswith("recommended"):
+                c_candidates.append(reduced_results[res])
             else:
                 o_candidates.append(res)
         for clist in imgorder:
@@ -256,13 +270,20 @@ class ScanRepo(object):
                 clist = self._sort_images_by_name(clist)
         r = {}
         # Index corresponds to order in displayorder
-        imap = {"daily": {"index": 0,
-                          "count": self.dailies},
-                "weekly": {"index": 1,
-                           "count": self.weeklies},
-                "release": {"index": 2,
-                            "count": self.releases}
-                }
+        idxbase = 0
+        imap = {}
+        if self.recommended:
+            imap.update({"recommended": {"index": idxbase,
+                                         "count": 1}
+                         })
+            idxbase = 1
+        imap.update({"daily": {"index": idxbase,
+                               "count": self.dailies},
+                     "weekly": {"index": idxbase + 1,
+                                "count": self.weeklies},
+                     "release": {"index": idxbase + 2,
+                                 "count": self.releases}
+                     })
         for ikey in list(imap.keys()):
             idx = imap[ikey]["index"]
             ict = imap[ikey]["count"]

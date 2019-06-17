@@ -24,6 +24,7 @@ class Prepuller(object):
                               owner="lsstsqre",
                               name="sciplat-lab",
                               port=None,
+                              recommended=True,
                               dailies=3,
                               weeklies=2,
                               releases=1,
@@ -154,6 +155,7 @@ class Prepuller(object):
                                  dailies=self.args.dailies,
                                  weeklies=self.args.weeklies,
                                  releases=self.args.releases,
+                                 recommended=self.args.recommended,
                                  json=True, insecure=self.args.insecure,
                                  sort_field=self.args.sort,
                                  debug=self.args.debug)
@@ -174,7 +176,11 @@ class Prepuller(object):
                                              sort_keys=True,
                                              indent=4))
             scan_imgs = []
-            for section in ["daily", "weekly", "release"]:
+            sections = []
+            if self.args.recommended:
+                sections.extend(["recommended"])
+            sections.extend(["daily", "weekly", "release"])
+            for section in sections:
                 for entry in self.repo.data[section]:
                     exhost = ''
                     if self.args.repo:
@@ -209,7 +215,6 @@ class Prepuller(object):
                 taints = [x.effect for x in spec.taints]
                 if "NoSchedule" in taints:
                     continue
-            skip = False
             if self.reject_by_label(thing):
                 continue
             nodes.append(thing.metadata.name)

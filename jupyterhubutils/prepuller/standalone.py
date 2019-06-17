@@ -70,6 +70,10 @@ def parse_args():
                         help=("Kubernetes namespace [namespace" +
                               " of container, or 'default' if not run " +
                               " inside kubernetes]"))
+    parser.add_argument("--recommended",
+                        help=("Pull image with tag 'recommended' [True]"),
+                        type=bool,
+                        default=True)
     results = parser.parse_args()
     results.path = ("/v2/repositories/" + results.owner + "/" +
                     results.name + "/tags/")
