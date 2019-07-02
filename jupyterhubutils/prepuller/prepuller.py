@@ -28,6 +28,7 @@ class Prepuller(object):
                               dailies=3,
                               weeklies=2,
                               releases=1,
+                              experimentals=0,
                               insecure=False,
                               sort="name",
                               list=None,
@@ -155,6 +156,7 @@ class Prepuller(object):
                                  dailies=self.args.dailies,
                                  weeklies=self.args.weeklies,
                                  releases=self.args.releases,
+                                 experimentals=self.args.experimentals,
                                  recommended=self.args.recommended,
                                  json=True, insecure=self.args.insecure,
                                  sort_field=self.args.sort,
@@ -179,7 +181,7 @@ class Prepuller(object):
             sections = []
             if self.args.recommended:
                 sections.extend(["recommended"])
-            sections.extend(["daily", "weekly", "release"])
+            sections.extend(["experimental", "daily", "weekly", "release"])
             for section in sections:
                 for entry in self.repo.data[section]:
                     exhost = ''

@@ -37,6 +37,10 @@ def parse_args():
     parser.add_argument("-b", "--releases", "--release", type=int,
                         help="# of release builds to keep [1]",
                         default=1)
+    parser.add_argument("-e", "--experimentals", "--experimental",
+                        "--exp", type=int,
+                        help="# of experimental builds to keep [0]",
+                        default=0)
     parser.add_argument("-i", "--insecure", "--no-tls", "--no-ssl",
                         help="Do not use TLS to connect [False]",
                         action='store_true',
