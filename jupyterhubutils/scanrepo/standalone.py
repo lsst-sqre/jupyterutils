@@ -12,6 +12,7 @@ def standalone():
                        dailies=args.dailies,
                        weeklies=args.weeklies,
                        releases=args.releases,
+                       experimentals=args.experimentals,
                        recommended=args.recommended,
                        json=args.json,
                        insecure=args.insecure,
@@ -41,6 +42,10 @@ def parse_args():
     parser.add_argument("-w", "--weeklies", "--weekly", type=int,
                         help="# of weekly builds to keep [2]",
                         default=2)
+    parser.add_argument("-e", "--experimentals", "--experimental",
+                        "--exp", type=int,
+                        help="# of experimental builds to keep [0]",
+                        default=0)
     parser.add_argument("-b", "--releases", "--release", type=int,
                         help="# of release builds to keep [1]",
                         default=1)

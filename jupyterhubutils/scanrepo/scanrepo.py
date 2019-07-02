@@ -25,6 +25,7 @@ class ScanRepo(object):
     json = False
     insecure = False
     sort_field = "name"
+    experimentals = 0
     dailies = 3
     weeklies = 2
     releases = 1
@@ -33,7 +34,7 @@ class ScanRepo(object):
     logger = None
 
     def __init__(self, host='', path='', owner='', name='',
-                 dailies=3, weeklies=2, releases=1,
+                 experimentals=0, dailies=3, weeklies=2, releases=1,
                  recommended=True,
                  json=False, port=None,
                  insecure=False, sort_field="", debug=False):
@@ -48,6 +49,8 @@ class ScanRepo(object):
             self.owner = owner
         if name:
             self.name = name
+        if experimentals:
+            self.experimentals = experimentals
         if dailies:
             self.dailies = dailies
         if weeklies:
@@ -91,7 +94,7 @@ class ScanRepo(object):
         cs = []
         if (self.recommended and "recommended" in self.data):
             cs.extend(self.data["recommended"])
-        for k in ["daily", "weekly", "release"]:
+        for k in ["experimental", "daily", "weekly", "release"]:
             cs.extend(self.data[k])
         ldescs = []
         for c in cs:
@@ -133,6 +136,9 @@ class ScanRepo(object):
                     month = components[2]
                     day = components[3]
                     ld = "Daily %s_%s_%s" % (year, month, day)
+                elif btype == "e":
+                    rest = "_".join(components[1:])
+                    ld = "Experimental %s" % rest
             else:
                 if tag.startswith("recommended"):
                     ld = "R" + tag[1:]
@@ -149,6 +155,9 @@ class ScanRepo(object):
                     month = tag[5:7]
                     day = tag[7:]
                     ld = "Daily %s_%s_%s" % (year, month, day)
+                elif tag[0] == "e":
+                    rest = tag[1:]
+                    ld = "Experimental %s" % rest
             ldescs.append(ld)
         ls = [self.owner + "/" + self.name + ":" + x["name"] for x in cs]
         return ls, ldescs
@@ -234,9 +243,10 @@ class ScanRepo(object):
         displayorder = []
         if self.recommended:
             displayorder.extend([c_candidates])
-        displayorder.extend([d_candidates, w_candidates, r_candidates])
+        displayorder.extend([e_candidates, d_candidates, w_candidates,
+                             r_candidates])
         # This is the order for tags to appear in drop-down:
-        imgorder = [l_candidates, e_candidates]
+        imgorder = [l_candidates]
         imgorder.extend(displayorder)
         imgorder.extend(o_candidates)
         reduced_results = {}
@@ -277,17 +287,20 @@ class ScanRepo(object):
                                          "count": 1}
                          })
             idxbase = 1
-        imap.update({"daily": {"index": idxbase,
+        imap.update({"experimental": {"index": idxbase,
+                                      "count": self.experimentals},
+                     "daily": {"index": idxbase + 1,
                                "count": self.dailies},
-                     "weekly": {"index": idxbase + 1,
+                     "weekly": {"index": idxbase + 2,
                                 "count": self.weeklies},
-                     "release": {"index": idxbase + 2,
+                     "release": {"index": idxbase + 3,
                                  "count": self.releases}
                      })
         for ikey in list(imap.keys()):
             idx = imap[ikey]["index"]
             ict = imap[ikey]["count"]
-            r[ikey] = displayorder[idx][:ict]
+            if ict:
+                r[ikey] = displayorder[idx][:ict]
         all_tags = []
         for clist in imgorder:
             all_tags.extend(x["name"] for x in clist)
