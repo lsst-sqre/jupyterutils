@@ -95,7 +95,8 @@ class ScanRepo(object):
         if (self.recommended and "recommended" in self.data):
             cs.extend(self.data["recommended"])
         for k in ["experimental", "daily", "weekly", "release"]:
-            cs.extend(self.data[k])
+            if k in self.data:
+                cs.extend(self.data[k])
         ldescs = []
         for c in cs:
             tag = c["name"]
