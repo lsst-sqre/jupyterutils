@@ -183,6 +183,8 @@ class Prepuller(object):
                 sections.extend(["recommended"])
             sections.extend(["experimental", "daily", "weekly", "release"])
             for section in sections:
+                if section not in self.repo.data:
+                    next
                 for entry in self.repo.data[section]:
                     exhost = ''
                     if self.args.repo:
