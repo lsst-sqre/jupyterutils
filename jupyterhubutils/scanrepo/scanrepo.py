@@ -353,9 +353,15 @@ class ScanRepo(object):
             if len(components) > 2:
                 minor = int(components[2])
             patch = 0
-            if len(components) > 3:
-                patch = int(components[3])
             prerelease = None
+            if len(components) > 3:
+                try:
+                    patch = int(components[3])
+                except ValueError:
+                    # Not an integer, so this is probably an experimental/
+                    #  not-for-release version, so leave it at patch level 0
+                    #  and treat the string as a prerelease version
+                    prerelease = components[3]
             if len(components) > 4:
                 prerelease = components[4]
             build = None
