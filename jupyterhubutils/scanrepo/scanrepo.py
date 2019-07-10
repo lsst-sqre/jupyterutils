@@ -137,7 +137,7 @@ class ScanRepo(object):
                     month = components[2]
                     day = components[3]
                     ld = "Daily %s_%s_%s" % (year, month, day)
-                elif btype == "e":
+                elif btype == "exp":
                     rest = "_".join(components[1:])
                     ld = "Experimental %s" % rest
             else:
