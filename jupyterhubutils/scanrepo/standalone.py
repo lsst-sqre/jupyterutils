@@ -25,7 +25,7 @@ def standalone():
 
 def parse_args():
     """Parse command-line arguments"""
-    desc = "Set up DaemonSets to prepull."
+    desc = "Get list of Lab Images for display or prepulling"
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("-d", "--debug", action="store_true",
                         help="enable debugging")

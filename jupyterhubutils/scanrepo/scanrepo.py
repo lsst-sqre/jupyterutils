@@ -33,6 +33,7 @@ class ScanRepo(object):
     releases = 1
     recommended = True
     _results = None
+    _results_map = {}
     _name_to_manifest = {}
     _all_tags = []
     logger = None
@@ -84,7 +85,7 @@ class ScanRepo(object):
             reghost += ":" + str(port)
         if cachefile:
             self.cachefile = cachefile
-            self._read_cache()
+            self._read_cachefile()
         if not self.path:
             self.path = ("/v2/repositories/" + self.owner + "/" +
                          self.name + "/tags/")
@@ -123,20 +124,45 @@ class ScanRepo(object):
         ls = [self.owner + "/" + self.name + ":" + x["name"] for x in cs]
         return ls, ldescs
 
-    def _read_cache(self):
+    def _read_cachefile(self):
+        fn = self.cachefile
         try:
-            with open(self.cachefile) as f:
+            with open(fn) as f:
                 data = json.load(f)
         except Exception as exc:
             self.logger.error(
-                "Failed to load cachefile '{}'".format(self.cachefile))
+                "Failed to load cachefile '{}'".format(fn))
             self.logger.error("Error: {}".format(exc))
             return
-        for kind in data.keys():
-            for item in data[kind]:
-                tstr = item["updated"]
-                item["updated"] = self._convert_time(tstr)
-        self.data = data
+        nm = self._name_to_manifest
+        rm = self._results_map
+        for tag in data.keys():
+            ihash = data[tag].get("hash")
+            ilayers = data[tag].get("layers")
+            updated = None
+            updatedstr = data[tag].get("updated")
+            if updatedstr:
+                updated = self._convert_time(updatedstr)
+            if ihash and updated:
+                if (tag not in nm or (nm[tag]["updated"] < updated)):
+                    self.logger.debug(
+                        "Updating name map for {}".format(tag))
+                    nm[tag] = {"hash": ihash,
+                               "updated": updated}
+                    if ilayers:
+                        nm[tag]["layers"] = ilayers
+                if tag not in rm:
+                    self.logger.debug(
+                        "Creating result entry for {}".format(tag))
+                    rm[tag] = {"last_updated": updatedstr,
+                               "name": tag}
+                else:
+                    l_updated = self._convert_time(rm[tag]["last_updated"])
+                    if l_updated < updated:
+                        self.logger.debug(
+                            "Updating result entry for {}".format(tag))
+                        rm[tag] = {"last_updated": updatedstr,
+                                   "name": tag}
 
     def _describe_tag(self, tag):
         # New-style tags have underscores separating components.
@@ -221,12 +247,32 @@ class ScanRepo(object):
                 return k
 
     def _data_to_json(self):
-        rdata = copy.deepcopy(self.data)
-        for kind in rdata:
-            for entry in rdata[kind]:
-                dt = entry["updated"]
-                entry["updated"] = dt.isoformat()
-        return json.dumps(rdata, sort_keys=True, indent=4)
+        return json.dumps(self.data, sort_keys=True, indent=4,
+                          default=self._serialize_datetime)
+
+    def _namemap_to_json(self):
+        modmap = {}
+        nm = self._name_to_manifest
+        rm = self._results_map
+        for k in nm:
+            dt = nm[k].get("updated")
+            dstr = None
+            if dt:
+                dstr = self._serialize_datetime(dt)
+            else:
+                dstr = rm[k].get("last_updated")
+            ihash = nm[k].get("hash")
+            if ihash and dstr:
+                modmap[k] = {"updated": dstr,
+                             "hash": ihash}
+        return json.dumps(modmap, sort_keys=True, indent=4)
+
+    def _serialize_datetime(self, o):
+        if isinstance(o, datetime.datetime):
+            dstr = o.__str__().replace(' ', 'T')
+            if dstr[-1].isdigit():
+                dstr += "Z"
+            return dstr
 
     def report(self):
         """Print the tag data"""
@@ -288,28 +334,40 @@ class ScanRepo(object):
                 break
             page = page + 1
         self._results = results
+        self._update_results_map(results)
         self._map_names_to_manifests()
         self._reduce_results()
 
-    def _map_names_to_manifests(self):
-        results = self._results
-        namemap = self._name_to_manifest
-        check_names = []
+    def _update_results_map(self, results):
+        rm = self._results_map
         for res in results:
             name = res["name"]
-            tstamp = self._convert_time(res["last_updated"])
-            if not namemap.get(name):
-                namemap[name] = {
+            if name not in rm:
+                rm[name] = {}
+            rm[name].update(res)
+
+    def _map_names_to_manifests(self):
+        results = self._results_map
+        namemap = self._name_to_manifest
+        check_names = []
+        for tag in results:
+            tstamp = self._convert_time(results[tag]["last_updated"])
+            if not namemap.get(tag):
+                namemap[tag] = {
                     "layers": None,
                     "updated": tstamp,
                     "hash": None
                 }
-            if tstamp <= namemap[name]["updated"] and namemap[name]["hash"]:
+            if tstamp <= namemap[tag]["updated"] and namemap[tag]["hash"]:
                 # We have a manifest
+                # Update results map with hash
+                results[tag]["hash"] = namemap[tag]["hash"]
                 continue
-            check_names.append(name)
+            check_names.append(tag)
         if not check_names:
             self.logger.debug("All images have current hash.")
+            if self.cachefile:
+                self._writecachefile()
             # We're up to date.
             return
         baseurl = self.registry_url
@@ -348,13 +406,33 @@ class ScanRepo(object):
                                 json=True)
             recjson = {}
             if resp:
-                recjson = resp.json()
+                try:
+                    recjson = resp.json()
+                except Exception as exc:
+                    self.logger.error("Could not decode response as JSON!")
+                    self.logger.error("{}".format(resp.text))
             layers = self._get_layers(recjson)
             namemap[name]["layers"] = layers
-            hash = self._get_layer_hash(layers)
-            namemap[name]["hash"] = hash
-            self.logger.debug("{} hash: {}".format(name, hash))
-        self._name_to_manifest = namemap
+            ihash = self._get_layer_hash(layers)
+            namemap[name]["hash"] = ihash
+            results[name]["hash"] = ihash
+            dstr = results[name]["last_updated"]
+            if dstr:
+                dt = self._convert_time(dstr)
+                namemap[name]["updated"] = dt
+            self.logger.debug("{} hash: {}".format(name, ihash))
+        self._name_to_manifest.update(namemap)
+        if self.cachefile:
+            self._writecachefile()
+
+    def _writecachefile(self):
+        if self.cachefile:
+            try:
+                with open(self.cachefile, 'w') as f:
+                    f.write(self._namemap_to_json())
+            except Exception as exc:
+                self.logger.error(
+                    "Could not write to {}: {}".format(self.cachefile, exc))
 
     def _get_layers(self, recjson):
         fsl = recjson.get("fsLayers")
@@ -363,6 +441,8 @@ class ScanRepo(object):
         return [x["blobSum"] for x in fsl]
 
     def _get_layer_hash(self, layers):
+        if not layers:
+            return None
         lstr = "+".join(layers).encode('utf-8')
         lhash = hashlib.sha256(lstr)
         return lhash.hexdigest()
@@ -454,13 +534,6 @@ class ScanRepo(object):
         for clist in imgorder:
             all_tags.extend(x["name"] for x in clist)
         self.data = r
-        if self.cachefile:
-            try:
-                with open(self.cachefile, 'w') as f:
-                    f.write(self._data_to_json())
-            except Exception as exc:
-                self.logger.error(
-                    "Could not write to {}: {}".format(self.cachefile, exc))
         self._all_tags = all_tags
 
     def _sort_images_by_name(self, clist):
@@ -556,4 +629,7 @@ class ScanRepo(object):
         f = '%Y-%m-%dT%H:%M:%S.%f%Z'
         if ts[-1] == "Z":
             ts = ts[:-1] + "UTC"
+        if ts[-1].isdigit():
+            # Naive time
+            f = '%Y-%m-%dT%H:%M:%S.%f'
         return datetime.datetime.strptime(ts, f)
