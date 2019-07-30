@@ -1,12 +1,14 @@
 import copy
 import datetime
 import functools
+import hashlib
 import json
 import logging
 import re
+import requests
+import semver
 import urllib.parse
 import urllib.request
-import semver
 
 
 class ScanRepo(object):
@@ -30,13 +32,17 @@ class ScanRepo(object):
     weeklies = 2
     releases = 1
     recommended = True
+    _results = None
+    _name_to_manifest = {}
     _all_tags = []
     logger = None
+    cachefile = None
 
     def __init__(self, host='', path='', owner='', name='',
                  experimentals=0, dailies=3, weeklies=2, releases=1,
                  recommended=True,
                  json=False, port=None,
+                 cachefile=None,
                  insecure=False, sort_field="", debug=False):
         logging.basicConfig()
         self.logger = logging.getLogger(__name__)
@@ -70,13 +76,23 @@ class ScanRepo(object):
             self.logger.setLevel(logging.DEBUG)
             self.logger.debug("Debug logging on.")
         exthost = self.host
+        reghost = exthost
+        if reghost == "hub.docker.com":
+            reghost = "registry.hub.docker.com"
         if port:
             exthost += ":" + str(port)
+            reghost += ":" + str(port)
+        if cachefile:
+            self.cachefile = cachefile
+            self._read_cache()
         if not self.path:
             self.path = ("/v2/repositories/" + self.owner + "/" +
                          self.name + "/tags/")
         self.url = protocol + "://" + exthost + self.path
-        self.logger.debug("URL %s" % self.url)
+        self.registry_url = (protocol + "://" + reghost + "/v2/" +
+                             self.owner + "/" + self.name + "/")
+        self.logger.debug("URL: {}".format(self.url))
+        self.logger.debug("Registry URL: {}".format(self.registry_url))
 
     def __enter__(self):
         return self
@@ -100,78 +116,122 @@ class ScanRepo(object):
         ldescs = []
         for c in cs:
             tag = c["name"]
-            # New-style tags have underscores separating components.
-            components = None
-            if tag.find('_') != -1:
-                components = tag.split('_')
-            if components:
-                btype = components[0]
-                # Handle the r17_0_1 case.
-                ctm = re.search(r'\d+$', btype)
-                if ctm is not None:
-                    mj = int(ctm.group())
-                    components.insert(1, mj)
-                    btype = btype[0]
-                if tag.startswith("recommended"):
-                    ld = "R" + tag[1:]
-                elif btype == "r":
-                    rmaj = components[1]
-                    rmin = components[2]
-                    rpatch = None
-                    rrest = None
-                    if len(components) > 3:
-                        rpatch = components[3]
-                    if len(components) > 4:
-                        rrest = "_".join(components[4:])
-                    ld = "Release %s.%s" % (rmaj, rmin)
-                    if rpatch:
-                        ld = ld + "." + rpatch
-                    if rrest:
-                        ld = ld + "-" + rrest
-                elif btype == "w":
-                    year = components[1]
-                    week = components[2]
-                    ld = "Weekly %s_%s" % (year, week)
-                elif btype == "d":
-                    year = components[1]
-                    month = components[2]
-                    day = components[3]
-                    ld = "Daily %s_%s_%s" % (year, month, day)
-                elif btype == "exp":
-                    rest = "_".join(components[1:])
-                    ld = "Experimental %s" % rest
-            else:
-                if tag.startswith("recommended"):
-                    ld = "R" + tag[1:]
-                elif tag[0] == "r":
-                    rmaj = tag[1:3]
-                    rmin = tag[3:]
-                    ld = "Release %s.%s" % (rmaj, rmin)
-                elif tag[0] == "w":
-                    year = tag[1:5]
-                    week = tag[5:]
-                    ld = "Weekly %s_%s" % (year, week)
-                elif tag[0] == "d":
-                    year = tag[1:5]
-                    month = tag[5:7]
-                    day = tag[7:]
-                    ld = "Daily %s_%s_%s" % (year, month, day)
-                elif tag[0] == "e":
-                    rest = tag[1:]
-                    ld = "Experimental %s" % rest
+            ld = c.get("description")
+            if not ld:
+                ld = self._describe_tag(tag)
             ldescs.append(ld)
         ls = [self.owner + "/" + self.name + ":" + x["name"] for x in cs]
         return ls, ldescs
 
+    def _read_cache(self):
+        try:
+            with open(self.cachefile) as f:
+                data = json.load(f)
+        except Exception as exc:
+            self.logger.error(
+                "Failed to load cachefile '{}'".format(self.cachefile))
+            self.logger.error("Error: {}".format(exc))
+            return
+        for kind in data.keys():
+            for item in data[kind]:
+                tstr = item["updated"]
+                item["updated"] = self._convert_time(tstr)
+        self.data = data
+
+    def _describe_tag(self, tag):
+        # New-style tags have underscores separating components.
+        ld = tag  # Default description is just the tag name
+        components = None
+        if tag.find('_') != -1:
+            components = tag.split('_')
+            btype = components[0]
+            # Handle the r17_0_1 case.
+            ctm = re.search(r'\d+$', btype)
+            if ctm is not None:
+                mj = int(ctm.group())
+                components.insert(1, mj)
+                btype = btype[0]
+            if (tag.startswith("recommended") or tag.startswith("latest")):
+                ld = tag[0].upper() + tag[1:]
+                restag = self.resolve_tag(tag)
+                if restag:
+                    ld += " ({})".format(self._describe_tag(restag))
+            elif btype == "r":
+                rmaj = components[1]
+                rmin = components[2]
+                rpatch = None
+                rrest = None
+                if len(components) > 3:
+                    rpatch = components[3]
+                if len(components) > 4:
+                    rrest = "_".join(components[4:])
+                ld = "Release %s.%s" % (rmaj, rmin)
+                if rpatch:
+                    ld = ld + "." + rpatch
+                if rrest:
+                    ld = ld + "-" + rrest
+            elif btype == "w":
+                year = components[1]
+                week = components[2]
+                ld = "Weekly %s_%s" % (year, week)
+            elif btype == "d":
+                year = components[1]
+                month = components[2]
+                day = components[3]
+                ld = "Daily %s_%s_%s" % (year, month, day)
+            elif btype == "exp":
+                rest = "_".join(components[1:])
+                ld = "Experimental %s" % rest
+        else:
+            if (tag.startswith("recommended") or tag.startswith("latest")):
+                ld = tag[0].upper() + tag[1:]
+                restag = self.resolve_tag(tag)
+                if restag:
+                    ld += " ({})".format(self._describe_tag(restag))
+            elif tag[0] == "r":
+                rmaj = tag[1:3]
+                rmin = tag[3:]
+                ld = "Release %s.%s" % (rmaj, rmin)
+            elif tag[0] == "w":
+                year = tag[1:5]
+                week = tag[5:]
+                ld = "Weekly %s_%s" % (year, week)
+            elif tag[0] == "d":
+                year = tag[1:5]
+                month = tag[5:7]
+                day = tag[7:]
+                ld = "Daily %s_%s_%s" % (year, month, day)
+            elif tag[0] == "e":
+                rest = tag[1:]
+                ld = "Experimental %s" % rest
+        return ld
+
+    def resolve_tag(self, tag):
+        """Resolve a tag (used for "recommended" or "latest*" """
+        mfest = self._name_to_manifest.get(tag)
+        if not mfest:
+            return None
+        hash = mfest.get("hash")
+        if not hash:
+            return None
+        for k in self._name_to_manifest:
+            if (k.startswith("recommended") or k.startswith("latest")):
+                continue
+            if self._name_to_manifest[k].get("hash") == hash:
+                return k
+
+    def _data_to_json(self):
+        rdata = copy.deepcopy(self.data)
+        for kind in rdata:
+            for entry in rdata[kind]:
+                dt = entry["updated"]
+                entry["updated"] = dt.isoformat()
+        return json.dumps(rdata, sort_keys=True, indent=4)
+
     def report(self):
         """Print the tag data"""
         if self.json:
-            rdata = copy.deepcopy(self.data)
-            for kind in rdata:
-                for entry in rdata[kind]:
-                    dt = entry["updated"]
-                    entry["updated"] = dt.isoformat()
-            print(json.dumps(rdata, sort_keys=True, indent=4))
+            print(self._data_to_json())
         else:
             ls, ldescs = self.extract_image_info()
             ldstr = ",".join(ldescs)
@@ -204,6 +264,7 @@ class ScanRepo(object):
 
     def scan(self):
         url = self.url
+        self.logger.debug("Beginning repo scan of '{}'.".format(url))
         results = []
         page = 1
         resp_bytes = None
@@ -226,9 +287,88 @@ class ScanRepo(object):
             if "next" not in j or not j["next"]:
                 break
             page = page + 1
-        self._reduce_results(results)
+        self._results = results
+        self._map_names_to_manifests()
+        self._reduce_results()
 
-    def _reduce_results(self, results):
+    def _map_names_to_manifests(self):
+        results = self._results
+        namemap = self._name_to_manifest
+        check_names = []
+        for res in results:
+            name = res["name"]
+            tstamp = self._convert_time(res["last_updated"])
+            if not namemap.get(name):
+                namemap[name] = {
+                    "layers": None,
+                    "updated": tstamp,
+                    "hash": None
+                }
+            if tstamp <= namemap[name]["updated"] and namemap[name]["hash"]:
+                # We have a manifest
+                continue
+            check_names.append(name)
+        if not check_names:
+            self.logger.debug("All images have current hash.")
+            # We're up to date.
+            return
+        baseurl = self.registry_url
+        url = baseurl + "manifests/recommended"
+        i_resp = requests.get(url)
+        authtok = None
+        sc = i_resp.status_code
+        if sc == 401:
+            self.logger.debug("Getting token to retrieve layer lists.")
+            magicheader = i_resp.headers['Www-Authenticate']
+            if magicheader[:7] == "Bearer ":
+                hd = {}
+                hl = magicheader[7:].split(",")
+                for hn in hl:
+                    il = hn.split("=")
+                    kk = il[0]
+                    vv = il[1].replace('"', "")
+                    hd[kk] = vv
+                if (not hd or "realm" not in hd or "service" not in hd
+                        or "scope" not in hd):
+                    return None
+                endpoint = hd["realm"]
+                del hd["realm"]
+                tresp = requests.get(endpoint, params=hd, json=True)
+                jresp = tresp.json()
+                authtok = jresp.get("token")
+        elif sc != 200:
+            self.logger.warning("GET %s -> %d" % (url, sc))
+        headers = {"Accept": "application/json"}
+        if authtok:
+            headers.update({"Authorization": "Bearer {}".format(authtok)})
+        for name in check_names:
+            self.logger.debug("Calculating hash for '{}' tag.".format(name))
+            resp = requests.get(baseurl + "manifests/{}".format(name),
+                                headers=headers,
+                                json=True)
+            recjson = {}
+            if resp:
+                recjson = resp.json()
+            layers = self._get_layers(recjson)
+            namemap[name]["layers"] = layers
+            hash = self._get_layer_hash(layers)
+            namemap[name]["hash"] = hash
+            self.logger.debug("{} hash: {}".format(name, hash))
+        self._name_to_manifest = namemap
+
+    def _get_layers(self, recjson):
+        fsl = recjson.get("fsLayers")
+        if not fsl:
+            return None
+        return [x["blobSum"] for x in fsl]
+
+    def _get_layer_hash(self, layers):
+        lstr = "+".join(layers).encode('utf-8')
+        lhash = hashlib.sha256(lstr)
+        return lhash.hexdigest()
+
+    def _reduce_results(self):
+        results = self._results
         sort_field = self.sort_field
         # Recommended
         # Release/Weekly/Daily
@@ -257,8 +397,16 @@ class ScanRepo(object):
                 "name": vname,
                 "id": res["id"],
                 "size": res["full_size"],
-                "updated": self._convert_time(res["last_updated"])
+                "description": self._describe_tag(vname)
             }
+            entry = reduced_results[vname]
+            manifest = self._name_to_manifest.get(vname)
+            if manifest:
+                entry["updated"] = manifest.get("updated")
+                entry["hash"] = manifest.get("hash")
+            else:
+                entry["updated"] = self._convert_time(res["last_updated"])
+                entry["hash"] = None
         for res in reduced_results:
             if res.startswith("r") and not res.startswith("recommended"):
                 r_candidates.append(reduced_results[res])
@@ -306,6 +454,13 @@ class ScanRepo(object):
         for clist in imgorder:
             all_tags.extend(x["name"] for x in clist)
         self.data = r
+        if self.cachefile:
+            try:
+                with open(self.cachefile, 'w') as f:
+                    f.write(self._data_to_json())
+            except Exception as exc:
+                self.logger.error(
+                    "Could not write to {}: {}".format(self.cachefile, exc))
         self._all_tags = all_tags
 
     def _sort_images_by_name(self, clist):

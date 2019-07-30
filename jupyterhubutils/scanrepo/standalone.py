@@ -17,6 +17,7 @@ def standalone():
                        json=args.json,
                        insecure=args.insecure,
                        sort_field=args.sort,
+                       cachefile=args.cachefile,
                        debug=args.debug)
     scanner.scan()
     scanner.report()
@@ -69,6 +70,8 @@ def parse_args():
                         " not sourceable shell fragment [False]",
                         action='store_true',
                         default=False)
+    parser.add_argument("-f", "--cachefile", help="Cachefile for results " +
+                        " [None]", default=None)
     results = parser.parse_args()
     results.path = ("/v2/repositories/" + results.owner + "/" +
                     results.name + "/tags/")
