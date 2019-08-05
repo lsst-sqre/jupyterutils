@@ -1,4 +1,3 @@
-import copy
 import datetime
 import functools
 import hashlib
@@ -530,11 +529,9 @@ class ScanRepo(object):
             ict = imap[ikey]["count"]
             if ict:
                 r[ikey] = displayorder[idx][:ict]
-        all_tags = []
-        for clist in imgorder:
-            all_tags.extend(x["name"] for x in clist)
-        self.data = r
+        all_tags = sorted(list(self._results_map.keys()))
         self._all_tags = all_tags
+        self.data = r
 
     def _sort_images_by_name(self, clist):
         # We have a flag day where we start putting underscores into

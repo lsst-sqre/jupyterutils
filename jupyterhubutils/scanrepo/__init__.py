@@ -1,3 +1,4 @@
 from .scanrepo import ScanRepo
 from .standalone import standalone
-__all__ = [ScanRepo, standalone]
+from .singletonscanner import SingletonScanner
+__all__ = [ScanRepo, SingletonScanner, standalone]
