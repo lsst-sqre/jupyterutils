@@ -395,7 +395,11 @@ class ScanRepo(object):
                 authtok = jresp.get("token")
         elif sc != 200:
             self.logger.warning("GET %s -> %d" % (url, sc))
-        headers = {"Accept": "application/json"}
+        # https://docs.docker.com/registry/spec/api/ , "Deleting An Image"
+        # Yep, I think that's the only place it tells you that you need
+        #  this magic header to get the digest hash.
+        headers = {
+            "Accept": "application/vnd.docker.distribution.manifest.v2+json"}
         if authtok:
             headers.update({"Authorization": "Bearer {}".format(authtok)})
         for name in check_names:
@@ -409,17 +413,16 @@ class ScanRepo(object):
                     recjson = resp.json()
                 except Exception as exc:
                     self.logger.error("Could not decode response as JSON!")
+                    self.logger.error("Exception: {}".format(exc))
                     self.logger.error("{}".format(resp.text))
-            layers = self._get_layers(recjson)
-            namemap[name]["layers"] = layers
-            ihash = self._get_layer_hash(layers)
-            namemap[name]["hash"] = ihash
-            results[name]["hash"] = ihash
-            dstr = results[name]["last_updated"]
-            if dstr:
-                dt = self._convert_time(dstr)
-                namemap[name]["updated"] = dt
-            self.logger.debug("{} hash: {}".format(name, ihash))
+                ihash = recjson["config"]["digest"]
+                namemap[name]["hash"] = ihash
+                results[name]["hash"] = ihash
+                dstr = results[name]["last_updated"]
+                if dstr:
+                    dt = self._convert_time(dstr)
+                    namemap[name]["updated"] = dt
+                self.logger.debug("{} hash: {}".format(name, ihash))
         self._name_to_manifest.update(namemap)
         if self.cachefile:
             self._writecachefile()
@@ -432,19 +435,6 @@ class ScanRepo(object):
             except Exception as exc:
                 self.logger.error(
                     "Could not write to {}: {}".format(self.cachefile, exc))
-
-    def _get_layers(self, recjson):
-        fsl = recjson.get("fsLayers")
-        if not fsl:
-            return None
-        return [x["blobSum"] for x in fsl]
-
-    def _get_layer_hash(self, layers):
-        if not layers:
-            return None
-        lstr = "+".join(layers).encode('utf-8')
-        lhash = hashlib.sha256(lstr)
-        return lhash.hexdigest()
 
     def _reduce_results(self):
         results = self._results
