@@ -371,7 +371,7 @@ class ScanRepo(object):
             return
         baseurl = self.registry_url
         url = baseurl + "manifests/recommended"
-        i_resp = requests.get(url)
+        i_resp = requests.head(url)
         authtok = None
         sc = i_resp.status_code
         if sc == 401:
@@ -403,26 +403,17 @@ class ScanRepo(object):
         if authtok:
             headers.update({"Authorization": "Bearer {}".format(authtok)})
         for name in check_names:
-            self.logger.debug("Calculating hash for '{}' tag.".format(name))
-            resp = requests.get(baseurl + "manifests/{}".format(name),
-                                headers=headers,
-                                json=True)
-            recjson = {}
-            if resp:
-                try:
-                    recjson = resp.json()
-                except Exception as exc:
-                    self.logger.error("Could not decode response as JSON!")
-                    self.logger.error("Exception: {}".format(exc))
-                    self.logger.error("{}".format(resp.text))
-                ihash = recjson["config"]["digest"]
-                namemap[name]["hash"] = ihash
-                results[name]["hash"] = ihash
-                dstr = results[name]["last_updated"]
-                if dstr:
-                    dt = self._convert_time(dstr)
-                    namemap[name]["updated"] = dt
-                self.logger.debug("{} hash: {}".format(name, ihash))
+            self.logger.debug("Getting hash for '{}' tag.".format(name))
+            resp = requests.head(baseurl + "manifests/{}".format(name),
+                                headers=headers)
+            ihash = resp.headers["Docker-Content-Digest"]
+            namemap[name]["hash"] = ihash
+            results[name]["hash"] = ihash
+            dstr = results[name]["last_updated"]
+            if dstr:
+                dt = self._convert_time(dstr)
+                namemap[name]["updated"] = dt
+            self.logger.debug("{} hash: {}".format(name, ihash))
         self._name_to_manifest.update(namemap)
         if self.cachefile:
             self._writecachefile()
