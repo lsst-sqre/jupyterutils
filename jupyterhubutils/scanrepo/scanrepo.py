@@ -55,13 +55,13 @@ class ScanRepo(object):
             self.owner = owner
         if name:
             self.name = name
-        if experimentals:
+        if experimentals is not None:
             self.experimentals = experimentals
-        if dailies:
+        if dailies is not None:
             self.dailies = dailies
-        if weeklies:
+        if weeklies is not None:
             self.weeklies = weeklies
-        if releases:
+        if releases is not None:
             self.releases = releases
         if json:
             self.json = json
