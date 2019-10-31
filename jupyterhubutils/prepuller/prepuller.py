@@ -1,7 +1,6 @@
 import argparse
 import copy
 import json
-import logging
 import os
 import signal
 import sys
@@ -10,6 +9,7 @@ from threading import Thread
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
 from jupyterhubutils.scanrepo import ScanRepo
+from ..utils import make_logger
 
 
 class Prepuller(object):
@@ -49,15 +49,12 @@ class Prepuller(object):
     created_pods = []
 
     def __init__(self, args=None):
-        logging.basicConfig()
-        self.logger = logging.getLogger(__name__)
         if args:
             self.args = args
         if self.args and self.args.debug:
-            self.logger.setLevel(logging.DEBUG)
-            self.logger.debug("Debug logging on.")
-        else:
-            self.logger.setLevel(logging.INFO)
+            self.debug = True
+        self.logger = make_logger(debug=self.debug)
+        self.logger.debug("Debug logging on.")
         namespace = None
         try:
             config.load_incluster_config()

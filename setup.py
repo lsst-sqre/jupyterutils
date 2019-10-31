@@ -53,8 +53,12 @@ setuptools.setup(
     keywords='lsst',
     install_requires=[
         'requests>=2.0.0,<3.0.0',
-        'kubernetes>=9.0.0,<11.0.0',
-        'semver>=2.0.0,<3.0.0'
+        'kubernetes>=9.0.0,<10.0.0',
+        'semver>=2.0.0,<3.0.0',
+        'oauthenticator>=0.9.0,<1.0.0',
+        'jupyter-client>=5.0.0,<6.0.0',
+        'jupyterhub-jwtauthenticator>=0.1.0,<1.0.0',
+        'jupyterhub-kubespawner>=0.10.0,<1.0.0',
     ],
     entry_points={
         'console_scripts': [

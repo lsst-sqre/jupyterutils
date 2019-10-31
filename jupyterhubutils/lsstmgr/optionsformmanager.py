@@ -1,25 +1,37 @@
-from .. import SingletonScanner
-
+'''Class to manage an LSST-specific options form.
+'''
 import datetime
 import json
-import logging
 import os
 
-from .logobject import LSSTLogObject
+from time import sleep
+
+from .. import SingletonScanner
+from ..utils import make_logger, str_bool
 
 
-class LSSTOptionsForm(LSSTLogObject):
-    """Mixin class to add a scanner-based options form and read values
-       from it."""
+class LSSTOptionsFormManager(object):
+    '''Class to create and read a spawner form.
+    '''
 
+    quota_mgr = None
     sizelist = ["tiny", "small", "medium", "large"]
     _sizemap = {}
     _scanner = None
 
-    def __init__(self, args, **kwargs):
-        self.super().__init__(args, kwargs)
+    def __init__(self, *args, **kwargs):
+        self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
+        self.log = make_logger(name=__name__, debug=self.debug)
+        self.log.debug("Creating LSSTOptionsFormManager")
+        self.parent = kwargs.pop('parent', None)
+        quota_mgr = kwargs.pop('quota_mgr', None)
+        if not quota_mgr and self.parent and hasattr(self.parent, 'quota_mgr'):
+            quota_mgr = self.parent.quota_mgr
+        self.quota_mgr = quota_mgr
 
     def lsst_options_form(self):
+        '''Create an LSST Options Form based on our environment and defaults.
+        '''
         # Make options form by scanning container repository
         title = os.getenv("LAB_SELECTOR_TITLE") or "Container Image Selector"
         owner = os.getenv("LAB_REPO_OWNER") or "lsstsqre"
@@ -119,6 +131,27 @@ class LSSTOptionsForm(LSSTLogObject):
         optform += "Menu updated at %s<br />\n" % nowstr
         return optform
 
+    def resolve_tag(self, tag):
+        '''Delegate to scanner to resolve convenience tags.
+        '''
+        return self._scanner.resolve_tag(tag)
+
+    def _sync_scan(self):
+        scanner = self._scanner
+        delay_interval = 5
+        max_delay = 300
+        delay = 0
+        while scanner.last_updated == datetime.datetime(1970, 1, 1):
+            self.log.warning("Scan results not available yet; sleeping " +
+                             "{}s ({}s so far).".format(delay_interval,
+                                                        delay))
+            sleep(delay_interval)
+            delay = delay + delay_interval
+            if delay >= max_delay:
+                errstr = ("Scan results did not become available in " +
+                          "{}s.".format(max_delay))
+                raise RuntimeError(errstr)
+
     def _make_sizemap(self):
         sizes = self.sizelist
         tiny_cpu = os.environ.get('TINY_MAX_CPU') or 0.5
@@ -142,7 +175,12 @@ class LSSTOptionsForm(LSSTLogObject):
 
     def _get_size_index(self):
         sizes = list(self._sizemap.keys())
-        si = self._custom_resources.get(
+        cr = None
+        if self.quota_mgr:
+            cr = self.quota_mgr._custom_resources
+        if cr is None:
+            cr = {}
+        si = cr.get(
             "size_index") or os.environ.get('SIZE_INDEX') or 1
         size_index = int(si)
         if size_index >= len(sizes):
@@ -150,6 +188,8 @@ class LSSTOptionsForm(LSSTLogObject):
         return size_index
 
     def options_from_form(self, formdata=None):
+        '''Get user selections.
+        '''
         options = None
         if formdata:
             self.log.debug("Form data: %s", json.dumps(formdata,
