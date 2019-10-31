@@ -1,13 +1,13 @@
 import datetime
 import functools
-import hashlib
 import json
-import logging
 import re
 import requests
 import semver
 import urllib.parse
 import urllib.request
+
+from ..utils import make_logger
 
 
 class ScanRepo(object):
@@ -44,9 +44,9 @@ class ScanRepo(object):
                  json=False, port=None,
                  cachefile=None,
                  insecure=False, sort_field="", debug=False):
-        logging.basicConfig()
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
+        if debug:
+            self.debug = debug
+        self.logger = make_logger(debug=self.debug)
         if host:
             self.host = host
         if path:
@@ -71,10 +71,6 @@ class ScanRepo(object):
             protocol = "http"
         if sort_field:
             self.sort_field = sort_field
-        if debug:
-            self.debug = debug
-            self.logger.setLevel(logging.DEBUG)
-            self.logger.debug("Debug logging on.")
         exthost = self.host
         reghost = exthost
         if reghost == "hub.docker.com":
@@ -144,22 +140,16 @@ class ScanRepo(object):
                 updated = self._convert_time(updatedstr)
             if ihash and updated:
                 if (tag not in nm or (nm[tag]["updated"] < updated)):
-                    self.logger.debug(
-                        "Updating name map for {}".format(tag))
                     nm[tag] = {"hash": ihash,
                                "updated": updated}
                     if ilayers:
                         nm[tag]["layers"] = ilayers
                 if tag not in rm:
-                    self.logger.debug(
-                        "Creating result entry for {}".format(tag))
                     rm[tag] = {"last_updated": updatedstr,
                                "name": tag}
                 else:
                     l_updated = self._convert_time(rm[tag]["last_updated"])
                     if l_updated < updated:
-                        self.logger.debug(
-                            "Updating result entry for {}".format(tag))
                         rm[tag] = {"last_updated": updatedstr,
                                    "name": tag}
 
@@ -235,14 +225,17 @@ class ScanRepo(object):
         """Resolve a tag (used for "recommended" or "latest*" """
         mfest = self._name_to_manifest.get(tag)
         if not mfest:
+            self.logger.debug("Did not find manifest for '{}'".format(tag))
             return None
         hash = mfest.get("hash")
+        self.logger.debug("Tag '{}' hash -> '{}'".format(tag, hash))
         if not hash:
             return None
         for k in self._name_to_manifest:
             if (k.startswith("recommended") or k.startswith("latest")):
                 continue
             if self._name_to_manifest[k].get("hash") == hash:
+                self.logger.debug("Found matching hash for tag '{}'".format(k))
                 return k
 
     def _data_to_json(self):
@@ -403,9 +396,8 @@ class ScanRepo(object):
         if authtok:
             headers.update({"Authorization": "Bearer {}".format(authtok)})
         for name in check_names:
-            self.logger.debug("Getting hash for '{}' tag.".format(name))
             resp = requests.head(baseurl + "manifests/{}".format(name),
-                                headers=headers)
+                                 headers=headers)
             ihash = resp.headers["Docker-Content-Digest"]
             namemap[name]["hash"] = ihash
             results[name]["hash"] = ihash
@@ -413,7 +405,6 @@ class ScanRepo(object):
             if dstr:
                 dt = self._convert_time(dstr)
                 namemap[name]["updated"] = dt
-            self.logger.debug("{} hash: {}".format(name, ihash))
         self._name_to_manifest.update(namemap)
         if self.cachefile:
             self._writecachefile()
