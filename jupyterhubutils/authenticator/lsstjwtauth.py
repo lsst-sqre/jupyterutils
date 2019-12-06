@@ -13,12 +13,13 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
     auth_refresh_age = 900
     enable_auth_state = True
     header_name = "X-Portal-Authorization"
+    header_is_authorization = True
     user = {}
 
     def __init__(self, *args, **kwargs):
         '''Add LSST Manager structure to hold LSST-specific logic.
         '''
-        _mock = kwargs.get('_mock'), False
+        _mock = kwargs.get('_mock', False)
         super().__init__(*args, **kwargs)
         self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
         self.log = make_logger(name=__name__, debug=self.debug)
@@ -55,3 +56,9 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
         am = self.lsst_mgr.auth_mgr
         rv = yield am.pre_spawn_start(user, spawner)
         return rv
+
+    def logout_url(self, base_url):
+        '''Returns the logout URL for JWT.  Assumes the LSST OAuth2
+        JWT proxy.
+        '''
+        return '/oauth2/sign_in'

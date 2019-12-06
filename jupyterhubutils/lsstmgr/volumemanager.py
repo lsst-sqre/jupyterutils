@@ -1,4 +1,4 @@
-'''Class to provide support for document-driven Volume assignment
+'''Class to provide support for document-driven Volume assignment.
 '''
 
 import base64
@@ -7,7 +7,7 @@ import os
 
 from ..utils import get_dummy_user, make_logger
 
-from kubernetes import client
+from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
 
@@ -41,7 +41,14 @@ class LSSTVolumeManager(object):
         if self.parent and hasattr(self.parent, "namespace_mgr"):
             namespace_mgr = self.parent.namespace_mgr
         self.namespace_mgr = namespace_mgr
-        self.api = kwargs.pop('api', client.CoreV1Api())
+        api = kwargs.pop('api', None)
+        if not api:
+            if not self._mock:
+                config.load_incluster_config()
+                api = client.CoreV1Api()
+            else:
+                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
+        self.api = api
         self.make_volumes_from_config(config_file=config_file)
 
     def make_volumes_from_config(self, config_file=None):
@@ -278,6 +285,13 @@ class LSSTVolumeManager(object):
         return pv
 
     def replicate_nfs_pvs(self):
+        '''Create shadow PVs for a namespaced environment.  Since PVs are
+        not namespaced, and since a PV can have only one PVC binding it, you
+        need to create shadow PVs if you are mounting NFS volumes via PVCs,
+        which you need to do if you want non-default options.  For NFSv3,
+        you're going to need local locking in the spawned pods, so that's why
+        you might do it.  Use NFSv4 and don't do this, if you can.
+        '''
         self.log.info("Replicating NFS PVs")
         if self.namespace_mgr:
             namespace = self.namespace_mgr.namespace

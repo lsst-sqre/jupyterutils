@@ -56,7 +56,14 @@ class LSSTNamespaceManager(object):
                 svc_acct = "dask"
         self.service_account = svc_acct
         # And we need a Core API k8s client, if there isn't one yet.
-        self.api = kwargs.pop('api', client.CoreV1Api())
+        api = kwargs.pop('api', None)
+        if not api:
+            if not self._mock:
+                config.load_incluster_config()
+                api = client.CoreV1Api()
+            else:
+                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
+        self.api = api
         # May get reset by spawner
         self.duplicate_nfs_pvs_to_namespace = kwargs.pop(
             'duplicate_nfs_pvs_to_namespace', False)
@@ -279,7 +286,7 @@ class LSSTNamespaceManager(object):
 
     def maybe_delete_namespace(self):
         '''Here we try to delete the namespace.  If it has no running pods,
-        we can delete it."
+        and it's not the default namespace, we can delete it."
 
         This requires a cluster role that can delete namespaces.'''
         self.log.debug("Attempting to delete namespace.")

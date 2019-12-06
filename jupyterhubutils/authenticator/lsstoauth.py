@@ -45,6 +45,8 @@ class LSSTOAuthenticator(oauthenticator.OAuthenticator):
 
     @gen.coroutine
     def authenticate(self, handler, data=None):
+        '''Authenticate via superclass, then propagate authenticated user
+        through LSST managers.'''
         userdict = yield super().authenticate(handler, data)
         self.log.debug(
             "Superclass authentication yielded: '{}'".format(userdict))
@@ -64,6 +66,8 @@ class LSSTOAuthenticator(oauthenticator.OAuthenticator):
         return rv
 
     async def refresh_auth(self):
+        '''Call superclass refresh_auth, and then propagate self.user
+        through LSST Managers.'''
         await super().refresh_auth()
         self.lsst_mgr.propagate_user(self.user)
         return self.user

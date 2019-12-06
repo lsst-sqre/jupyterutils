@@ -1,6 +1,6 @@
-"""
+'''
 Functions to aid with runtime configuration settings.
-"""
+'''
 
 import os
 
@@ -12,12 +12,18 @@ from ..utils import get_execution_namespace
 
 
 def get_authenticator_type():
+    '''Return the authenticator discriminator string: 'github', 'cilogon, or
+    'jwt'.
+    '''
     return (os.environ.get('AUTH_PROVIDER') or
             os.environ.get('OAUTH_PROVIDER') or
             "github")
 
 
 def get_authenticator_class():
+    '''Determine the authenticator type, and then return the appropriate
+    authenticator class.
+    '''
     authclass = None
     authtype = get_authenticator_type()
     if authtype == "github":
@@ -33,10 +39,12 @@ def get_authenticator_class():
 
 
 def get_callback_url():
+    '''Return the OAuth callback URL, set in the environment.'''
     return os.getenv('OAUTH_CALLBACK_URL')
 
 
 def get_audience():
+    '''Return the audience for the JWT.'''
     callback_url = get_callback_url()
     if callback_url:
         netloc = urlparse(callback_url).netloc
@@ -48,6 +56,8 @@ def get_audience():
 
 
 def get_oauth_parameters():
+    '''Return client ID and client secret for OAuth.
+    '''
     id = os.getenv('OAUTH_CLIENT_ID')
     secret = os.getenv('OAUTH_CLIENT_SECRET')
     if not id:
@@ -58,6 +68,9 @@ def get_oauth_parameters():
 
 
 def configure_authenticator():
+    '''Do all the LSST-specific configuration based on the authenticator
+    type and environment variables.
+    '''
     authtype = get_authenticator_type()
     authclass = get_authenticator_class()
     callback_url = get_callback_url()
@@ -66,7 +79,6 @@ def configure_authenticator():
         authclass.signing_certificate = '/opt/jwt/signing-certificate.pem'
         authclass.username_claim_field = 'uid'
         authclass.expected_audience = get_audience()
-        authclass.logout_url = custom_logout_url
     else:
         client_id, secret = get_oauth_parameters()
         authclass.client_id = client_id
@@ -80,34 +92,27 @@ def configure_authenticator():
             authclass.idp = idp
 
 
-def custom_logout_url(base_url):
-    callback_url = get_callback_url()
-    netloc = urlparse(callback_url).netloc
-    def_lo_url = None
-    if netloc:
-        def_lo_url = netloc + "/oauth2/sign_in"
-    logout_url = (os.getenv('LOGOUT_URL') or def_lo_url or
-                  base_url + "/logout")
-    return logout_url
-
-
 def get_db_url():
+    '''Return session database connection URL, set in the environment.
+    '''
     return os.getenv('SESSION_DB_URL')
 
 
 def get_hub_route():
+    '''Return the internal context root for the Hub, set in the environment.
+    Defaults to '/'.
+    '''
     return os.getenv('HUB_ROUTE') or "/"
 
 
 def get_hub_parameters():
-    hub_name = "hub"
+    '''Return the Hub service address, port, and route, determined from the
+    environment and the Kubernetes namespace.
+    '''
     hub_svc_address = None
     hub_route = get_hub_route()
     ns = get_execution_namespace()
-    helm_tag = os.getenv('HELM_TAG')
-    if helm_tag:
-        hub_name = "{}-hub".format(helm_tag)
-    hub_env = hub_name.replace('-', '_').upper()
+    hub_name, hub_env = get_helmed_name_and_env("hub")
     if ns:
         hub_svc_address = "{}.{}.svc.cluster.local".format(hub_name, ns)
     else:
@@ -120,6 +125,21 @@ def get_hub_parameters():
 
 
 def get_proxy_url():
-    proxy_host = os.getenv('PROXY_SERVICE_HOST') or '127.0.0.1'
-    proxy_port = os.getenv('PROXY_SERVICE_PORT_API') or '8001'
+    '''Return the URL for the Hub proxy.
+    '''
+    _, proxy_env = get_helmed_name_and_env("proxy")
+    proxy_host = os.getenv(proxy_env + '_SERVICE_HOST') or '127.0.0.1'
+    proxy_port = os.getenv(proxy_env + '_SERVICE_PORT_API') or '8001'
     return "http://" + proxy_host + ":" + proxy_port
+
+
+def get_helmed_name_and_env(name):
+    '''If the Helm tag is set, prepend that and a dash to the given name.
+    The corresponding environment variable set by Kubernetes will be that,
+    in uppercase, with dashes replaced by underscores.
+    '''
+    helm_tag = os.getenv('HELM_TAG')
+    if helm_tag:
+        name = "{}-{}".format(helm_tag, name)
+    env_name = name.replace('-', '_').upper()
+    return name, env_name
