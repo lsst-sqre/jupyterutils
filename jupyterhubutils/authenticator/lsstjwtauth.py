@@ -13,7 +13,7 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
     auth_refresh_age = 900
     enable_auth_state = True
     header_name = "X-Portal-Authorization"
-    header_is_authorization: True
+    header_is_authorization = True
     user = {}
 
     def __init__(self, *args, **kwargs):
