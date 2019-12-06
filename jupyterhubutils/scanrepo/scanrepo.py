@@ -97,12 +97,14 @@ class ScanRepo(object):
         self.close()
 
     def close(self):
-        '''Close the session"""
+        '''Close the session.
+        '''
         if self._session:
             self._session.close()
 
     def extract_image_info(self):
-        '''Build image name list and image description list"""
+        '''Build image name list and image description list.
+        '''
         cs = []
         if (self.recommended and "recommended" in self.data):
             cs.extend(self.data["recommended"])
@@ -222,7 +224,8 @@ class ScanRepo(object):
         return ld
 
     def resolve_tag(self, tag):
-        '''Resolve a tag (used for "recommended" or "latest*" """
+        '''Resolve a tag (used for "recommended" or "latest*").
+        '''
         mfest = self._name_to_manifest.get(tag)
         if not mfest:
             self.logger.debug("Did not find manifest for '{}'".format(tag))
@@ -267,7 +270,8 @@ class ScanRepo(object):
             return dstr
 
     def report(self):
-        '''Print the tag data"""
+        '''Print the tag data.
+        '''
         if self.json:
             print(self._data_to_json())
         else:
@@ -280,11 +284,13 @@ class ScanRepo(object):
             print("export LAB_CONTAINER_NAMES LAB_CONTAINER_DESCS")
 
     def get_data(self):
-        '''Return the tag data"""
+        '''Return the tag data.
+        '''
         return self.data
 
     def get_all_tags(self):
-        '''Return all tags in the repository."""
+        '''Return all tags in the repository.
+        '''
         return self._all_tags
 
     def _get_url(self, **kwargs):
@@ -301,6 +307,8 @@ class ScanRepo(object):
         return page
 
     def scan(self):
+        '''Perform the repository scan.
+        '''
         url = self.url
         self.logger.debug("Beginning repo scan of '{}'.".format(url))
         results = []

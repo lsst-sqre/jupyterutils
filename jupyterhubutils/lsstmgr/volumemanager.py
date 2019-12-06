@@ -1,4 +1,4 @@
-'''Class to provide support for document-driven Volume assignment
+'''Class to provide support for document-driven Volume assignment.
 '''
 
 import base64
@@ -278,6 +278,13 @@ class LSSTVolumeManager(object):
         return pv
 
     def replicate_nfs_pvs(self):
+        '''Create shadow PVs for a namespaced environment.  Since PVs are
+        not namespaced, and since a PV can have only one PVC binding it, you
+        need to create shadow PVs if you are mounting NFS volumes via PVCs,
+        which you need to do if you want non-default options.  For NFSv3,
+        you're going to need local locking in the spawned pods, so that's why
+        you might do it.  Use NFSv4 and don't do this, if you can.
+        '''
         self.log.info("Replicating NFS PVs")
         if self.namespace_mgr:
             namespace = self.namespace_mgr.namespace

@@ -184,8 +184,7 @@ class LSSTSpawner(KubeSpawner):
 
     @gen.coroutine
     def _new_get_pod_manifest(self):
-        '''Extend pod manifest.  This is a monster method.
-        '''
+        # Extend pod manifest.  This is a monster method.
         # Run the superclass version, and then extract the fields
         orig_pod = yield self._orig_get_pod_manifest()
         sc = orig_pod.spec.security_context

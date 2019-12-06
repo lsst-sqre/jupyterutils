@@ -1,5 +1,4 @@
-'''
-Setup Module for LSST Jupyter Hub Utilities
+'''Setup module for LSST JupyterHub Utilities.
 '''
 import codecs
 import io
@@ -19,7 +18,8 @@ def get_version(file, name='__version__'):
 
 
 def local_read(filename):
-    '''Convenience function for includes'''
+    '''Convenience function for includes.
+    '''
     full_filename = os.path.join(
         os.path.abspath(os.path.dirname(__file__)),
         filename)

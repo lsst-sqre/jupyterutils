@@ -1,4 +1,5 @@
-'''LSST-specific Github OAuthenticator class.
+'''LSST-specific Github OAuthenticator class, delegating its LSST-specific
+authentication to its auth_mgr.
 '''
 import oauthenticator
 import os

@@ -141,6 +141,9 @@ class LSSTMiddleManager(object):
         self.spawner = spawner
 
     def propagate_user(self, user):
+        '''Given a user, propagate it to all the subsidary managers, relink
+        them, and run a few update methods to set their attributes.
+        '''
         if not user:
             self.log.error("Cannot propagate empty user!")
             return
@@ -180,7 +183,7 @@ class LSSTMiddleManager(object):
         self.quota_mgr.set_custom_user_resources()
 
     def ensure_resources(self):
-        '''Delegate to namespace manager (it delegates to volume manager
-        for PV manipulation).
+        '''Delegate to namespace manager (it in turn delegates to volume
+        manager for PV manipulation).
         '''
         self.namespace_mgr.ensure_namespace()

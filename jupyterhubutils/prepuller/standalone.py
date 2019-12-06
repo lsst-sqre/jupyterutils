@@ -5,6 +5,8 @@ from .prepuller import Prepuller
 
 
 def standalone():
+    '''Run prepuller process as a standalone command.
+    '''
     args = parse_args()
     prepuller = Prepuller(args=args)
     prepuller.update_images_from_repo()
@@ -15,7 +17,8 @@ def standalone():
 
 
 def parse_args():
-    '''Parse command-line arguments"""
+    '''Parse command-line arguments.
+    '''
     desc = "Set up DaemonSets to prepull."
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("-d", "--debug", action="store_true",

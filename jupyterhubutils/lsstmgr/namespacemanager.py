@@ -279,7 +279,7 @@ class LSSTNamespaceManager(object):
 
     def maybe_delete_namespace(self):
         '''Here we try to delete the namespace.  If it has no running pods,
-        we can delete it."
+        and it's not the default namespace, we can delete it."
 
         This requires a cluster role that can delete namespaces.'''
         self.log.debug("Attempting to delete namespace.")

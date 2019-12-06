@@ -6,7 +6,8 @@ from ..singleton import Singleton
 
 
 class SingletonScanner(ScanRepo, metaclass=Singleton):
-    '''Singleton Object to hold rate-limited scanner."""
+    '''Singleton Object to hold rate-limited scanner.
+    '''
     min_refresh_time = 60
     max_cache_age = 600
     last_updated = datetime.datetime(1970, 1, 1)  # The Epoch
@@ -37,6 +38,8 @@ class SingletonScanner(ScanRepo, metaclass=Singleton):
         thd.start()
 
     def scan(self):
+        '''Execute repo scan.
+        '''
         _maxdelay = 300
         _initialdelay = 5
         _sofar = 0
@@ -79,21 +82,31 @@ class SingletonScanner(ScanRepo, metaclass=Singleton):
             self.scan()
 
     def get_data(self):
+        '''Return repo data.
+        '''
         self._scan_if_needed()
         return self.data
 
     def get_all_tags(self):
+        '''Return all tags in repo.
+        '''
         self._scan_if_needed()
         return self._all_tags
 
     def get_all_scan_results(self):
+        '''Return results from repository scan as dict.
+        '''
         self._scan_if_needed()
         return self._results_map
 
     def extract_image_info(self):
+        '''Get info for all images.
+        '''
         self._scan_if_needed()
         return super().extract_image_info()
 
     def report(self):
+        '''Report results of scan.
+        '''
         self._scan_if_needed()
         return super().report()
