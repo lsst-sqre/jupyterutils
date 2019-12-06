@@ -55,3 +55,9 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
         am = self.lsst_mgr.auth_mgr
         rv = yield am.pre_spawn_start(user, spawner)
         return rv
+
+    def logout_url(self, base_url):
+        '''Returns the logout URL for JWT.  Assumes the LSST OAuth2
+        JWT proxy.
+        '''
+        return '/oauth2/sign_in'

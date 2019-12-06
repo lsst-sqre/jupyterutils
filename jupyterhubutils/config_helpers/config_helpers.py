@@ -79,7 +79,6 @@ def configure_authenticator():
         authclass.signing_certificate = '/opt/jwt/signing-certificate.pem'
         authclass.username_claim_field = 'uid'
         authclass.expected_audience = get_audience()
-        authclass.logout_url = custom_logout_url
     else:
         client_id, secret = get_oauth_parameters()
         authclass.client_id = client_id
@@ -91,18 +90,6 @@ def configure_authenticator():
         idp = os.getenv("CILOGON_IDP_SELECTION")
         if idp:
             authclass.idp = idp
-
-
-def custom_logout_url(base_url):
-    '''Returns the logout URL for JWT.'''
-    callback_url = get_callback_url()
-    netloc = urlparse(callback_url).netloc
-    def_lo_url = None
-    if netloc:
-        def_lo_url = netloc + "/oauth2/sign_in"
-    logout_url = (os.getenv('LOGOUT_URL') or def_lo_url or
-                  base_url + "/logout")
-    return logout_url
 
 
 def get_db_url():
