@@ -303,13 +303,14 @@ class LSSTAuthManager(object):
         if not self._jwt_validate_user_from_claims_groups(claims):
             # We're either in a forbidden group, or not in any allowed group
             self.log.error("User did not validate from claims groups.")
-            return None
+            return False
         self.log.debug("Claims for user: {}".format(claims))
         self.log.debug("Membership: {}".format(claims["isMemberOf"]))
         gnames = [x["name"] for x in claims["isMemberOf"]]
         self.log.debug("Setting authenticator groups: {}.".format(gnames))
         self.authenticator.groups = gnames
         self.groups = gnames
+        return True
 
     def _jwt_validate_user_from_claims_groups(self, claims):
         alist = os.getenv('CILOGON_GROUP_WHITELIST').split(',')
