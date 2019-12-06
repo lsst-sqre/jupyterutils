@@ -312,10 +312,8 @@ class LSSTAuthManager(object):
         self.groups = gnames
 
     def _jwt_validate_user_from_claims_groups(self, claims):
-        alist = self.authenticator.allowed_groups.split(',')
-        dlist = []
-        if self.authenticator.forbidden_groups is not None:
-            dlist = self.authenticator.forbidden_groups.split(',')
+        alist = os.getenv('CILOGON_GROUP_WHITELIST').split(',')
+        dlist = os.getenv('CILOGON_GROUP_DENYLIST').split(',')
         membership = [x["name"] for x in claims["isMemberOf"]]
         intersection = list(set(dlist) & set(membership))
         if intersection:
