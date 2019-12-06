@@ -56,7 +56,14 @@ class LSSTNamespaceManager(object):
                 svc_acct = "dask"
         self.service_account = svc_acct
         # And we need a Core API k8s client, if there isn't one yet.
-        self.api = kwargs.pop('api', client.CoreV1Api())
+        api = kwargs.pop('api', None)
+        if not api:
+            if not self._mock:
+                config.load_incluster_config()
+                api = client.CoreV1Api()
+            else:
+                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
+        self.api = api
         # May get reset by spawner
         self.duplicate_nfs_pvs_to_namespace = kwargs.pop(
             'duplicate_nfs_pvs_to_namespace', False)

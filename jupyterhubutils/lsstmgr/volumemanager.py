@@ -7,7 +7,7 @@ import os
 
 from ..utils import get_dummy_user, make_logger
 
-from kubernetes import client
+from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
 
@@ -41,7 +41,14 @@ class LSSTVolumeManager(object):
         if self.parent and hasattr(self.parent, "namespace_mgr"):
             namespace_mgr = self.parent.namespace_mgr
         self.namespace_mgr = namespace_mgr
-        self.api = kwargs.pop('api', client.CoreV1Api())
+        api = kwargs.pop('api', None)
+        if not api:
+            if not self._mock:
+                config.load_incluster_config()
+                api = client.CoreV1Api()
+            else:
+                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
+        self.api = api
         self.make_volumes_from_config(config_file=config_file)
 
     def make_volumes_from_config(self, config_file=None):

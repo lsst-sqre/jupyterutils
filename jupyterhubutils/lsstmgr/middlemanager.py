@@ -35,14 +35,16 @@ class LSSTMiddleManager(object):
         self.parent = kwargs.pop('parent', None)
         self.log.info(
             "Parent of LSST Middle Manager is '{}'".format(self.parent))
-        api = kwargs.pop('api', None)
         _mock = kwargs.pop('_mock', False)
+        self._mock = _mock
+        api = kwargs.pop('api', None)
         if not api:
-            if not _mock:
+            if not self._mock:
                 config.load_incluster_config()
                 api = client.CoreV1Api()
+            else:
+                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
         self.api = api
-        self._mock = _mock
         defer_user = kwargs.pop('defer_user', False)
         self.defer_user = defer_user
         user = kwargs.pop('user', None)
