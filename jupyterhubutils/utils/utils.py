@@ -40,10 +40,7 @@ def make_logger(name=__name__, debug=False):
     fmt = logging.Formatter(fstr)
     ch.setFormatter(fmt)
     # Remove default handlers, if any
-    while len(logger.handlers) > 0:
-        oh = logger.handlers[0]
-        logger.log.debug("Removing logging handler: {}".format(oh))
-        logger.removeHandler(oh)
+    logger.handlers = []
     logger.addHandler(ch)
     if debug:
         logger.setLevel(logging.DEBUG)

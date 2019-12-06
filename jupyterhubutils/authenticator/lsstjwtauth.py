@@ -19,7 +19,7 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
     def __init__(self, *args, **kwargs):
         '''Add LSST Manager structure to hold LSST-specific logic.
         '''
-        _mock = kwargs.get('_mock'), False
+        _mock = kwargs.get('_mock', False)
         super().__init__(*args, **kwargs)
         self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
         self.log = make_logger(name=__name__, debug=self.debug)
