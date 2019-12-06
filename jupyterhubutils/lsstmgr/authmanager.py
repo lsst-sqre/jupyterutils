@@ -303,19 +303,18 @@ class LSSTAuthManager(object):
         if not self._jwt_validate_user_from_claims_groups(claims):
             # We're either in a forbidden group, or not in any allowed group
             self.log.error("User did not validate from claims groups.")
-            return None
+            return False
         self.log.debug("Claims for user: {}".format(claims))
         self.log.debug("Membership: {}".format(claims["isMemberOf"]))
         gnames = [x["name"] for x in claims["isMemberOf"]]
         self.log.debug("Setting authenticator groups: {}.".format(gnames))
         self.authenticator.groups = gnames
         self.groups = gnames
+        return True
 
     def _jwt_validate_user_from_claims_groups(self, claims):
-        alist = self.authenticator.allowed_groups.split(',')
-        dlist = []
-        if self.authenticator.forbidden_groups is not None:
-            dlist = self.authenticator.forbidden_groups.split(',')
+        alist = os.getenv('CILOGON_GROUP_WHITELIST').split(',')
+        dlist = os.getenv('CILOGON_GROUP_DENYLIST').split(',')
         membership = [x["name"] for x in claims["isMemberOf"]]
         intersection = list(set(dlist) & set(membership))
         if intersection:
@@ -350,48 +349,33 @@ class LSSTAuthManager(object):
         gh_token = auth_state.get("access_token")
         if gh_user:
             gh_id = gh_user.get("id")
-        gh_org = yield self._get_github_user_organizations(gh_token)
-        self.log.debug("GitHub organizations: {}".format(gh_org))
-        gh_email = gh_user.get("email")
-        if not gh_email:
-            gh_email = yield self._get_github_user_email(gh_token)
-        if gh_email:
-            update_env['GITHUB_EMAIL'] = gh_email
-        gh_login = gh_user.get("login")
-        gh_name = gh_user.get("name") or gh_login
-        if gh_id:
-            update_env['EXTERNAL_UID'] = str(gh_id)
-        if gh_org:
-            orglstr = ""
-            for k in gh_org:
-                if orglstr:
-                    orglstr += ","
-                orglstr += k + ":" + str(gh_org[k])
-            update_env['EXTERNAL_GROUPS'] = orglstr
-        if gh_name:
-            update_env['GITHUB_NAME'] = gh_name
-        if gh_login:
-            update_env['GITHUB_LOGIN'] = gh_login
-        if gh_token:
-            update_env['GITHUB_ACCESS_TOKEN'] = "[secret]"
-            self.log.info("Updated environment: %s", json.dumps(
-                update_env, sort_keys=True, indent=4))
-            update_env['GITHUB_ACCESS_TOKEN'] = gh_token
-        # Mask sensitive fields for logging
-        save_rtoken = auth_state.get('token_response')
-        if save_rtoken:
-            auth_state['token_response'] = '[secret]'
-        save_atoken = auth_state.get('access_token')
-        if save_atoken:
-            auth_state['access_token'] = '[secret]'
-        self.log.info("auth_state: %s", json.dumps(auth_state,
-                                                   indent=4,
-                                                   sort_keys=True))
-        if save_rtoken:
-            auth_state["token_response"] = save_rtoken
-        if save_atoken:
-            auth_state["access_token"] = save_atoken
-        # State restored
+            gh_org = yield self._get_github_user_organizations(gh_token)
+            self.log.debug("GitHub organizations: {}".format(gh_org))
+            gh_email = gh_user.get("email")
+            if not gh_email:
+                gh_email = yield self._get_github_user_email(gh_token)
+            if gh_email:
+                update_env['GITHUB_EMAIL'] = gh_email
+            gh_login = gh_user.get("login")
+            gh_name = gh_user.get("name") or gh_login
+            if gh_id:
+                update_env['EXTERNAL_UID'] = str(gh_id)
+            if gh_org:
+                orglstr = ""
+                for k in gh_org:
+                    if orglstr:
+                        orglstr += ","
+                        orglstr += k + ":" + str(gh_org[k])
+                update_env['EXTERNAL_GROUPS'] = orglstr
+            if gh_name:
+                update_env['GITHUB_NAME'] = gh_name
+            if gh_login:
+                update_env['GITHUB_LOGIN'] = gh_login
+            if gh_token:
+                update_env['GITHUB_ACCESS_TOKEN'] = "[secret]"
+                self.log.info("Updated environment: %s", json.dumps(
+                    update_env, sort_keys=True, indent=4))
+                update_env['GITHUB_ACCESS_TOKEN'] = gh_token
         if "cilogon_user" in auth_state:
             user_rec = auth_state["cilogon_user"]
             # Get UID and GIDs from OAuth reply
@@ -416,29 +400,44 @@ class LSSTAuthManager(object):
         token = auth_state.get("access_token")
         if token:
             update_env["ACCESS_TOKEN"] = token
-        claims = auth_state.get("claims")
-        if claims:
-            # Get UID and GIDs from OAuth reply
-            uid = claims.get("uidNumber")
-            if uid:
-                uid = str(uid)
-            else:
-                # Fake it
-                sub = claims.get("sub")
-                if sub:
-                    uid = sub.split("/")[-1]  # Pretend last field is UID
-            update_env['EXTERNAL_UID'] = uid
-            email = claims.get("email")
-            if email:
-                update_env['GITHUB_EMAIL'] = email
-            membership = claims.get("isMemberOf")
-            if membership:
-                grplist = self.map_groups(membership, update_env)
-            if not update_env.get('EXTERNAL_GROUPS'):
-                update_env['EXTERNAL_GROUPS'] = grplist
-            else:
-                update_env['EXTERNAL_GROUPS'] = self._group_merge(
-                    update_env['EXTERNAL_GROUPS'], grplist)
+            claims = auth_state.get("claims")
+            if claims:
+                # Get UID and GIDs from OAuth reply
+                uid = claims.get("uidNumber")
+                if uid:
+                    uid = str(uid)
+                else:
+                    # Fake it
+                    sub = claims.get("sub")
+                    if sub:
+                        uid = sub.split("/")[-1]  # Pretend last field is UID
+                update_env['EXTERNAL_UID'] = uid
+                email = claims.get("email")
+                if email:
+                    update_env['GITHUB_EMAIL'] = email
+                membership = claims.get("isMemberOf")
+                if membership:
+                    grplist = self.map_groups(membership, update_env)
+                    if not update_env.get('EXTERNAL_GROUPS'):
+                        update_env['EXTERNAL_GROUPS'] = grplist
+                    else:
+                        update_env['EXTERNAL_GROUPS'] = self._group_merge(
+                            update_env['EXTERNAL_GROUPS'], grplist)
+        # Mask sensitive fields for logging
+        save_rtoken = auth_state.get('token_response')
+        if save_rtoken:
+            auth_state['token_response'] = '[secret]'
+        save_atoken = auth_state.get('access_token')
+        if save_atoken:
+            auth_state['access_token'] = '[secret]'
+        self.log.info("auth_state: %s", json.dumps(auth_state,
+                                                   indent=4,
+                                                   sort_keys=True))
+        if save_rtoken:
+            auth_state["token_response"] = save_rtoken
+        if save_atoken:
+            auth_state["access_token"] = save_atoken
+        # State restored
         # Whew!
         # Update spawner environment
         if (spawner and

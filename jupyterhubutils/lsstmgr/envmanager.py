@@ -127,12 +127,20 @@ class LSSTEnvironmentManager(object):
         self.pod_env = retval
 
     def get_env(self):
+        '''Return the whole stored environment to caller as a dict.
+        '''
         return self.pod_env
 
     def get_env_key(self, key):
+        '''Return value of a specific key in the stored environment to caller.
+        '''
         return self.pod_env.get(key)
 
     def set_env(self, key, value):
+        '''Set a particular key in the stored environment to the given value.
+        If the value is 'None', delete the key, if it exists.
+
+        '''
         if value is None:
             if key in self.pod_env:
                 del(self.pod_env[key])
@@ -140,7 +148,12 @@ class LSSTEnvironmentManager(object):
             self.pod_env[key] = value
 
     def update_env(self, update_dict):
+        '''Update the stored environment with the supplied dict.
+        '''
         self.pod_env.update(update_dict)
 
     def get_env_json(self):
+        '''Return the stored environment as a JSON document, under the single
+        key 'environment'.
+        '''
         return json.dumps({"environment": self.pod_env})

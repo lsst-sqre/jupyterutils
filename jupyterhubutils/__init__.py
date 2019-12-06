@@ -1,6 +1,16 @@
-"""
-LSST Jupyter Hub Utilities
-"""
+'''LSST JupyterHub utilities and helpers.
+
+These implement the LSST-specific tooling for the LSST Science
+Platform Notebook Aspect.  The repo scanner looks for Docker images in
+a repository with a particular tag format; the prepuller pulls a
+subset of those images to each node.  The reaper removes images past a
+certain age, based on the tag format.  The LSST Manager class provides
+a hierarchy of objects that hold LSST-specific configuration and logic
+for spawning JupyterLab pods, and the spawner and authenticators
+provide the pod spawner and the LSST-supported authentication methods
+and logic.  Convenience functions are in 'utils' and JupyterHub
+configuration convenience functions are in 'config_helpers'.
+'''
 from .prepuller import Prepuller
 from .reaper import Reaper
 from .scanrepo import ScanRepo

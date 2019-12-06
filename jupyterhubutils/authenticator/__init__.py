@@ -1,3 +1,5 @@
+'''LSST Authentication classes.
+'''
 from .lsstcilogonauth import LSSTCILogonOAuthenticator
 from .lsstgithubauth import LSSTGitHubOAuthenticator
 from .lsstjwtauth import LSSTJWTAuthenticator

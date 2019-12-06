@@ -10,6 +10,8 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
 
     @gen.coroutine
     def get(self):
+        '''Authenticate on get() via reading the token from HTTP headers.
+        '''
         # This is taken from https://github.com/mogthesprog/jwtauthenticator
         #  but with our additional claim information checked and stuffed
         #  into auth_state, and allow/deny lists checked.

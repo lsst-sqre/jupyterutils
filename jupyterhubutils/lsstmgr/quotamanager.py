@@ -4,7 +4,7 @@ import json
 import os
 from kubernetes.client import V1ResourceQuotaSpec
 from kubernetes.client.rest import ApiException
-from kubernetes import client
+from kubernetes import client, config
 
 from ..utils import get_dummy_user, make_logger, str_bool
 
@@ -22,7 +22,7 @@ class LSSTQuotaManager(object):
     def __init__(self, *args, **kwargs):
         self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
         self.log = make_logger(name=__name__, debug=self.debug)
-        self.log.debug("Creating LSSTQuotaManager")        
+        self.log.debug("Creating LSSTQuotaManager")
         self.parent = kwargs.pop('parent', None)
         self._mock = kwargs.pop('_mock', False)
         self.defer_user = kwargs.pop('defer_user', False)
@@ -42,7 +42,15 @@ class LSSTQuotaManager(object):
         if self.parent and hasattr(self.parent, 'auth_mgr'):
             self.auth_mgr = self.parent.auth_mgr
         self.groups = self._get_user_groupnames()
-        self.api = kwargs.pop('api', client.CoreV1Api())
+        # And we need a Core API k8s client, if there isn't one yet.
+        api = kwargs.pop('api', None)
+        if not api:
+            if not self._mock:
+                config.load_incluster_config()
+                api = client.CoreV1Api()
+            else:
+                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
+        self.api = api
         if self.parent and hasattr(self.parent, 'namespace_mgr'):
             namespace_mgr = self.parent.namespace_mgr
         self.namespace_mgr = namespace_mgr

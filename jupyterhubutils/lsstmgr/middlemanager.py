@@ -35,14 +35,16 @@ class LSSTMiddleManager(object):
         self.parent = kwargs.pop('parent', None)
         self.log.info(
             "Parent of LSST Middle Manager is '{}'".format(self.parent))
-        api = kwargs.pop('api', None)
         _mock = kwargs.pop('_mock', False)
+        self._mock = _mock
+        api = kwargs.pop('api', None)
         if not api:
-            if not _mock:
+            if not self._mock:
                 config.load_incluster_config()
                 api = client.CoreV1Api()
+            else:
+                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
         self.api = api
-        self._mock = _mock
         defer_user = kwargs.pop('defer_user', False)
         self.defer_user = defer_user
         user = kwargs.pop('user', None)
@@ -141,6 +143,9 @@ class LSSTMiddleManager(object):
         self.spawner = spawner
 
     def propagate_user(self, user):
+        '''Given a user, propagate it to all the subsidary managers, relink
+        them, and run a few update methods to set their attributes.
+        '''
         if not user:
             self.log.error("Cannot propagate empty user!")
             return
@@ -180,7 +185,7 @@ class LSSTMiddleManager(object):
         self.quota_mgr.set_custom_user_resources()
 
     def ensure_resources(self):
-        '''Delegate to namespace manager (it delegates to volume manager
-        for PV manipulation).
+        '''Delegate to namespace manager (it in turn delegates to volume
+        manager for PV manipulation).
         '''
         self.namespace_mgr.ensure_namespace()
