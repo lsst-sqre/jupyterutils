@@ -19,7 +19,7 @@ def standalone():
 
 
 def parse_args():
-    """Parse command-line arguments"""
+    '''Parse command-line arguments"""
     desc = "Remove obsolete lab images"
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("-d", "--debug", action="store_true",

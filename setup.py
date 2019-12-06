@@ -1,6 +1,6 @@
-"""
+'''
 Setup Module for LSST Jupyter Hub Utilities
-"""
+'''
 import codecs
 import io
 import os
@@ -8,9 +8,9 @@ import setuptools
 
 
 def get_version(file, name='__version__'):
-    """Get the version of the package from the given file by
+    '''Get the version of the package from the given file by
     executing it and extracting the given `name`.
-    """
+    '''
     path = os.path.realpath(file)
     version_ns = {}
     with io.open(path, encoding="utf8") as f:
@@ -19,7 +19,7 @@ def get_version(file, name='__version__'):
 
 
 def local_read(filename):
-    """Convenience function for includes"""
+    '''Convenience function for includes'''
     full_filename = os.path.join(
         os.path.abspath(os.path.dirname(__file__)),
         filename)

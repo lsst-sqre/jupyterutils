@@ -15,7 +15,7 @@ def standalone():
 
 
 def parse_args():
-    """Parse command-line arguments"""
+    '''Parse command-line arguments"""
     desc = "Set up DaemonSets to prepull."
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("-d", "--debug", action="store_true",

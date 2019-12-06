@@ -6,7 +6,7 @@ from ..singleton import Singleton
 
 
 class SingletonScanner(ScanRepo, metaclass=Singleton):
-    """Singleton Object to hold rate-limited scanner."""
+    '''Singleton Object to hold rate-limited scanner."""
     min_refresh_time = 60
     max_cache_age = 600
     last_updated = datetime.datetime(1970, 1, 1)  # The Epoch

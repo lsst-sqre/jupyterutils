@@ -1,6 +1,6 @@
-"""
+'''
 LSST Jupyter Hub Utilities
-"""
+'''
 from .prepuller import Prepuller
 from .reaper import Reaper
 from .scanrepo import ScanRepo

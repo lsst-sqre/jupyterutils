@@ -41,33 +41,33 @@ class LSSTSpawner(KubeSpawner):
 
     delete_namespace_on_stop = Bool(
         True,
-        help="""
+        help='''
         If True, the entire namespace will be deleted when the lab pod stops.
         Set delete_namespaced_pvs_on_stop to True if you also want to
         delete shadow PVs created.
-        """
+        '''
     )
 
     duplicate_nfs_pvs_to_namespace = Bool(
         True,
-        help="""
+        help='''
         If true, all NFS PVs in the JupyterHub namespace will be replicated
         to the user namespace.
-        """
+        '''
     )
 
     delete_namespaced_pvs_on_stop = Bool(
         True,
-        help="""
+        help='''
         If True, and delete_namespace_on_stop is also True, any shadow PVs
         created for the user namespace will be deleted when the lab pod
         stops.
-        """
+        '''
     )
 
     enable_namespace_quotas = Bool(
         True,
-        help="""
+        help='''
         If True, will create a ResourceQuota object by calling
         `self.quota_mgr.get_resource_quota_spec()` and create a quota with
         the resulting specification within the namespace.
@@ -75,7 +75,7 @@ class LSSTSpawner(KubeSpawner):
         A subclass should override the quota manager's
         get_resource_quota_spec() to create a
         situationally-appropriate resource quota spec.
-        """
+        '''
     )
 
     def __init__(self, *args, **kwargs):

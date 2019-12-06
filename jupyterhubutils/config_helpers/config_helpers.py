@@ -1,6 +1,6 @@
-"""
+'''
 Functions to aid with runtime configuration settings.
-"""
+'''
 
 import os
 

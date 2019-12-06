@@ -1,6 +1,6 @@
-"""
+'''
 Shared utility functions.
-"""
+'''
 
 import logging
 import os

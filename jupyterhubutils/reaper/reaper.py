@@ -5,8 +5,8 @@ from jupyterhubutils.scanrepo import SingletonScanner
 
 
 class Reaper(SingletonScanner):
-    """Class to allow implementation of image retention policy.
-    """
+    '''Class to allow implementation of image retention policy.
+    '''
 
     _categorized_tags = {"weekly": [],
                          "daily": [],

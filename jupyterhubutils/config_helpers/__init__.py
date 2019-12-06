@@ -1,6 +1,6 @@
-"""
+'''
 LSST Jupyter Hub Utilities
-"""
+'''
 from .config_helpers import (get_authenticator_type,
                              get_authenticator_class,
                              configure_authenticator,
