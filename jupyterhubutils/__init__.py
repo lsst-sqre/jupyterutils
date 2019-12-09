@@ -21,14 +21,13 @@ from .spawner.lsstspawner import LSSTSpawner
 from .authenticator.lsstcilogonauth import LSSTCILogonOAuthenticator
 from .authenticator.lsstgithubauth import LSSTGitHubOAuthenticator
 from .authenticator.lsstjwtauth import LSSTJWTAuthenticator
-from .utils import (get_execution_namespace, get_dummy_user,
-                    make_logger, github_api_headers, str_bool, list_duplicates)
+from .utils import (rreplace, sanitize_dict, get_execution_namespace,
+                    get_dummy_user, make_logger, github_api_headers,
+                    str_bool, list_duplicates)
 from ._version import __version__
-all = [LSSTMiddleManager, Prepuller, Reaper,
-       ScanRepo, Singleton, SingletonScanner,
-       LSSTSpawner,
-       LSSTCILogonOAuthenticator, LSSTGitHubOAuthenticator,
-       LSSTJWTAuthenticator,
-       get_execution_namespace, get_dummy_user, make_logger,
-       github_api_headers, str_bool, list_duplicates,
+all = [LSSTMiddleManager, Prepuller, Reaper, ScanRepo, Singleton,
+       SingletonScanner, LSSTSpawner, LSSTCILogonOAuthenticator,
+       LSSTGitHubOAuthenticator, LSSTJWTAuthenticator, rreplace,
+       sanitize_dict, get_execution_namespace, get_dummy_user,
+       make_logger, github_api_headers, str_bool, list_duplicates,
        __version__]

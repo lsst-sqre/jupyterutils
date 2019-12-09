@@ -9,6 +9,26 @@ from collections import defaultdict
 from .dummyobject import DummyObject
 
 
+def rreplace(s, old, new, occurrence):
+    '''Convenience function from:
+    https://stackoverflow.com/questions/2556108/\
+    rreplace-how-to-replace-the-last-occurrence-of-an-expression-in-a-string
+    '''
+    li = s.rsplit(old, occurrence)
+    return new.join(li)
+
+
+def sanitize_dict(input_dict, sensitive_fields):
+    retval = {}
+    if not input_dict:
+        return retval
+    retval.update(input_dict)
+    for field in sensitive_fields:
+        if retval.get(field):
+            retval[field] = "[redacted]"
+    return retval
+
+
 def get_execution_namespace():
     '''Return Kubernetes namespace of this container.
     '''

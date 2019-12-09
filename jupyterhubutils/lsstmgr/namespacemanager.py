@@ -15,7 +15,7 @@ class LSSTNamespaceManager(object):
     '''
     user = None
     namespace = None
-    rbacapi = None
+    rbac_api = None
     #
     quota_mgr = None
     volume_mgr = None
@@ -105,7 +105,15 @@ class LSSTNamespaceManager(object):
             self.namespace = "{}-{}".format(execution_namespace,
                                             username)
         else:
-            self.log.warning("Using 'default' namespace.")
+            df_msg = "Using 'default' namespace."
+            if self._mock:
+                self.log.debug("Couldn't get namespace, but _mock is set.")
+                self.log.debug(df_msg)
+            elif self.defer_user:
+                self.log.debug("Couldn't get namespace, but defer_user set.")
+                self.log.debug(df_msg)
+            else:
+                self.log.warning(df_msg)
             self.namespace = "default"
 
     def ensure_namespace(self):
@@ -251,13 +259,13 @@ class LSSTNamespaceManager(object):
             else:
                 self.log.info("Service account '%s' " % account +
                               "in namespace '%s' already exists." % namespace)
-        if not self.rbacapi:
+        if not self.rbac_api:
             self.log.info("Attempting to create RBAC API Client.")
             config.load_incluster_config()
-            self.rbacapi = client.RbacAuthorizationV1Api()
+            self.rbac_api = client.RbacAuthorizationV1Api()
         try:
             self.log.info("Attempting to create role in namespace.")
-            self.rbacapi.create_namespaced_role(
+            self.rbac_api.create_namespaced_role(
                 namespace,
                 role)
         except ApiException as e:
@@ -271,7 +279,7 @@ class LSSTNamespaceManager(object):
                               "already exists in namespace '%s'." % namespace)
         try:
             self.log.info("Attempting to create rolebinding in namespace.")
-            self.rbacapi.create_namespaced_role_binding(
+            self.rbac_api.create_namespaced_role_binding(
                 namespace,
                 rolebinding)
         except ApiException as e:
@@ -313,7 +321,65 @@ class LSSTNamespaceManager(object):
                 phase = i.status.phase
                 if (phase == "Running" or phase == "Unknown"
                         or phase == "Pending"):
+                    pname = i.metadata.name
+                    if pname.startswith("dask-"):
+                        # We can murder abandoned dask pods
+                        continue
                     self.log.info("Pod in state '%s'; " % phase +
                                   "cannot delete namespace '%s'." % namespace)
                     return False
         return True
+
+    def destroy_namespaced_resource_quota(self):
+        '''Remove quotas from namespace.
+        You don't usually have to call this, since it will get
+        cleaned up as part of namespace deletion.
+        '''
+        namespace = self.get_user_namespace()
+        qname = "quota-" + namespace
+        dopts = client.V1DeleteOptions()
+        self.log.info("Deleting resourcequota '%s'" % qname)
+        self.api.delete_namespaced_resource_quota(qname, namespace, dopts)
+
+    def destroy_pvcs(self):
+        '''Remove PVCS from namespace.
+        You don't usually have to call this, since they will get
+        cleaned up as part of namespace deletion.
+        '''
+        namespace = self.get_user_namespace()
+        pvclist = self.api.list_namespaced_persistent_volume_claim(namespace)
+        if pvclist and pvclist.items and len(pvclist.items) > 0:
+            dopts = client.V1DeleteOptions()
+            for pvc in pvclist.items:
+                name = pvc.metadata.name
+                self.log.info("Deleting PVC '%s' " % name +
+                              "from namespace '%s'" % namespace)
+                self.api.delete_namespaced_persistent_volume_claim(name,
+                                                                   namespace,
+                                                                   dopts)
+
+    def delete_namespaced_service_account_objects(self):
+        '''Remove service accounts, roles, and rolebindings from namespace.
+        You don't usually have to call this, since they will get
+         cleaned up as part of namespace deletion.
+        '''
+        namespace = self.get_user_namespace()
+        account = self.service_account
+        if not account:
+            self.log.info("Service account not defined.")
+            return
+        dopts = client.V1DeleteOptions()
+        self.log.info("Deleting service accounts/role/rolebinding " +
+                      "for %s" % namespace)
+        self.rbac_api.delete_namespaced_role_binding(
+            account,
+            namespace,
+            dopts)
+        self.rbac_api.delete_namespaced_role(
+            account,
+            namespace,
+            dopts)
+        self.api.delete_namespaced_service_account(
+            account,
+            namespace,
+            dopts)

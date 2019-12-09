@@ -59,6 +59,7 @@ setuptools.setup(
         'jupyter-client>=5.0.0,<6.0.0',
         'jupyterhub-jwtauthenticator>=0.1.0,<1.0.0',
         'jupyterhub-kubespawner>=0.10.0,<1.0.0',
+        'namespacedkubespawner>=0.0.21,<1.0.0'
     ],
     entry_points={
         'console_scripts': [

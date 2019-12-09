@@ -4,16 +4,17 @@ namespaces, and with an lsst_mgr attribute.
 import os
 
 import json
-from kubespawner import KubeSpawner
+from kubernetes import client, config
+from .multispawner import MultiNamespacedKubeSpawner
 from kubespawner.objects import make_pod
 from tornado import gen
 from traitlets import Bool
 
 from .. import LSSTMiddleManager
-from ..utils import str_bool, make_logger
+from ..utils import str_bool, make_logger, sanitize_dict
 
 
-class LSSTSpawner(KubeSpawner):
+class LSSTSpawner(MultiNamespacedKubeSpawner):
     '''This, plus the LSST Manager class structure, implements the
     LSST-specific parts of our spawning requirements.
     '''
@@ -82,6 +83,23 @@ class LSSTSpawner(KubeSpawner):
         super().__init__(*args, **kwargs)
         self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
         self.log = make_logger(name=__name__, debug=self.debug)
+        api = kwargs.pop('api', None)
+        if not api:
+            if not self._mock:
+                config.load_incluster_config()
+                api = client.CoreV1Api()
+            else:
+                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
+        self.api = api
+        rbac_api = kwargs.pop('rbac_api', None)
+        if not rbac_api:
+            if not self._mock:
+                config.load_incluster_config()
+                rbac_api = client.RbacAuthorizationV1Api()
+            else:
+                self.log.debug("No RBAC_API, but _mock is set -> 'None'.")
+        self.rbac_api = rbac_api
+
         auth = None
         if hasattr(self.user, "authenticator"):
             auth = self.user.authenticator
@@ -92,6 +110,7 @@ class LSSTSpawner(KubeSpawner):
         else:
             self.lsst_mgr = LSSTMiddleManager(
                 parent=self, user=self.user, authenticator=auth,
+                api=self.api, rbac_api=self.rbac_api,
                 debug=self.debug, _mock=_mock)
         # Add the LSST-specific logic by gluing in manager methods
         lm = self.lsst_mgr
@@ -290,7 +309,7 @@ class LSSTSpawner(KubeSpawner):
         self.cpu_limit = cpu_limit
         mem_guar = em.get_env_key('LAB_MEM_GUARANTEE')
         if mem_guar is None:
-            mem_guar = '64K'
+            mem_guar = '1M'
         cpu_guar = em.get_env_key('LAB_CPU_GUARANTEE')
         if cpu_guar is None:
             cpu_guar = 0.02
@@ -310,6 +329,8 @@ class LSSTSpawner(KubeSpawner):
         self.cpu_guarantee = cpu_guar
         # Figure out the image and set the pod name from it.
         self.log.debug("Image: {}".format(image))
+        pod_env['JUPYTER_IMAGE_SPEC'] = image
+        em.set_env('JUPYTER_IMAGE_SPEC', image)
         self.image = image
         # Parse the image name + tag
         i_l = image.split("/")

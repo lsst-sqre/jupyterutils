@@ -15,6 +15,7 @@ class LSSTQuotaManager(object):
     namespace_mgr = None
     optionsform_mgr = None
     user = None
+    api = None
     groups = None
     quota = {}
     _custom_resources = {}
@@ -70,8 +71,12 @@ class LSSTQuotaManager(object):
         if not resource_file:
             resource_file = rfile
         if not os.path.exists(resource_file):
-            self.log.warning("Could not find resource definition file" +
-                             " at '{}'".format(resource_file))
+            nf_msg = ("Could not find resource definition file" +
+                      " at '{}'".format(resource_file))
+            if self._mock:
+                self.log.debug(nf_msg + ", but _mock is set.")
+            else:
+                self.log.warning(nf_msg)
             return None
         with open(resource_file, "r") as rf:
             resmap = json.load(rf)
