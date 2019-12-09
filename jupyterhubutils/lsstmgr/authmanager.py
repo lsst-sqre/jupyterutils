@@ -13,13 +13,14 @@ from kubernetes import client
 from oauthenticator.common import next_page_from_links
 from tornado import gen
 from tornado.httpclient import HTTPRequest, AsyncHTTPClient, HTTPError
-from ..utils import (make_logger, github_api_headers,
+from ..utils import (make_logger, github_api_headers, sanitize_dict,
                      str_bool, list_duplicates, get_dummy_user)
 
 
 class LSSTAuthManager(object):
     spawner = None
     authenticator = None
+    env_mgr = None
 
     def __init__(self, *args, **kwargs):
         self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
@@ -361,20 +362,14 @@ class LSSTAuthManager(object):
             if gh_id:
                 update_env['EXTERNAL_UID'] = str(gh_id)
             if gh_org:
-                orglstr = ""
-                for k in gh_org:
-                    if orglstr:
-                        orglstr += ","
-                        orglstr += k + ":" + str(gh_org[k])
+                orglstr = ','.join(["{}:{}".format(k, gh_org[k])
+                                    for k in list(gh_org.keys())])
                 update_env['EXTERNAL_GROUPS'] = orglstr
             if gh_name:
                 update_env['GITHUB_NAME'] = gh_name
             if gh_login:
                 update_env['GITHUB_LOGIN'] = gh_login
             if gh_token:
-                update_env['GITHUB_ACCESS_TOKEN'] = "[secret]"
-                self.log.info("Updated environment: %s", json.dumps(
-                    update_env, sort_keys=True, indent=4))
                 update_env['GITHUB_ACCESS_TOKEN'] = gh_token
         if "cilogon_user" in auth_state:
             user_rec = auth_state["cilogon_user"]
@@ -430,26 +425,22 @@ class LSSTAuthManager(object):
         save_atoken = auth_state.get('access_token')
         if save_atoken:
             auth_state['access_token'] = '[secret]'
-        self.log.info("auth_state: %s", json.dumps(auth_state,
+        sanitized = sanitize_dict(
+            auth_state, ['token_response', 'access_token'])
+        self.log.info("auth_state: %s", json.dumps(sanitized,
                                                    indent=4,
                                                    sort_keys=True))
-        if save_rtoken:
-            auth_state["token_response"] = save_rtoken
-        if save_atoken:
-            auth_state["access_token"] = save_atoken
         # State restored
         # Whew!
-        # Update spawner environment
-        if (spawner and
-            hasattr(spawner, "environment") and
-                type(update_env) == dict):
-            spawner.environment.update(update_env)
         # Do the update of the LSST manager stuff.
         lsst_mgr = self.parent
         if not lsst_mgr:
             self.log.error("No parent LSST Manager!")
             return
         lsst_mgr.propagate_user(user)
+        # Update spawning environment
+        if self.env_mgr:
+            self.env_mgr.update_env(update_env)
         lsst_mgr.ensure_resources()
 
     def map_groups(self, membership, update_env):

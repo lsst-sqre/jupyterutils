@@ -432,8 +432,8 @@ class LSSTVolumeManager(object):
         '''Return the base-64 encoding of the K8s statements to create
         the pod's mountpoints.  Probably better handled as a ConfigMap.
         '''
-        vmt_yaml = self._get_volume_mount_yaml(left_pad=6)
-        vol_yaml = self._get_volume_yaml(left_pad=4)
+        vmt_yaml = self._get_volume_mount_yaml(left_pad=4)
+        vol_yaml = self._get_volume_yaml(left_pad=2)
         ystr = vmt_yaml + vol_yaml
         self.log.debug("Dask yaml:\n%s" % ystr)
         benc = base64.b64encode(ystr.encode('utf-8')).decode('utf-8')
