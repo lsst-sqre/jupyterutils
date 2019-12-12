@@ -1,17 +1,13 @@
 '''This is a JupyterHub KubeSpawner, extended with the ability to manipulate
 namespaces, and with an lsst_mgr attribute.
 '''
-import os
-
 import json
-from kubernetes import client, config
 from .multispawner import MultiNamespacedKubeSpawner
 from kubespawner.objects import make_pod
 from tornado import gen
 from traitlets import Bool
 
-from .. import LSSTMiddleManager
-from ..utils import str_bool, make_logger, sanitize_dict
+from ..utils import make_logger
 
 
 class LSSTSpawner(MultiNamespacedKubeSpawner):
@@ -41,32 +37,17 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
 
     delete_namespace_on_stop = Bool(
         True,
+        config=True,
         help='''
         If True, the entire namespace will be deleted when the lab pod stops.
         Set delete_namespaced_pvs_on_stop to True if you also want to
         delete shadow PVs created.
         '''
-    )
-
-    duplicate_nfs_pvs_to_namespace = Bool(
-        True,
-        help='''
-        If true, all NFS PVs in the JupyterHub namespace will be replicated
-        to the user namespace.
-        '''
-    )
-
-    delete_namespaced_pvs_on_stop = Bool(
-        True,
-        help='''
-        If True, and delete_namespace_on_stop is also True, any shadow PVs
-        created for the user namespace will be deleted when the lab pod
-        stops.
-        '''
-    )
+    ).tag(config=True)
 
     enable_namespace_quotas = Bool(
         True,
+        config=True,
         help='''
         If True, will create a ResourceQuota object by calling
         `self.quota_mgr.get_resource_quota_spec()` and create a quota with
@@ -76,68 +57,29 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         get_resource_quota_spec() to create a
         situationally-appropriate resource quota spec.
         '''
-    )
+    ).tag(config=True)
 
     def __init__(self, *args, **kwargs):
-        _mock = kwargs.get('_mock', False)  # Don't pop it; superclass needs it
         super().__init__(*args, **kwargs)
-        self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
-        self.log = make_logger(name=__name__, debug=self.debug)
-        api = kwargs.pop('api', None)
-        if not api:
-            if not self._mock:
-                config.load_incluster_config()
-                api = client.CoreV1Api()
-            else:
-                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
-        self.api = api
-        rbac_api = kwargs.pop('rbac_api', None)
-        if not rbac_api:
-            if not self._mock:
-                config.load_incluster_config()
-                rbac_api = client.RbacAuthorizationV1Api()
-            else:
-                self.log.debug("No RBAC_API, but _mock is set -> 'None'.")
-        self.rbac_api = rbac_api
-
-        auth = None
-        if hasattr(self.user, "authenticator"):
-            auth = self.user.authenticator
-        # If the authenticator is one of ours, it will have an
-        #  LSSTMiddleManager associated with it; use that if it exists.
-        if hasattr(auth, "lsst_mgr"):
-            self.lsst_mgr = auth.lsst_mgr
-        else:
-            self.lsst_mgr = LSSTMiddleManager(
-                parent=self, user=self.user, authenticator=auth,
-                api=self.api, rbac_api=self.rbac_api,
-                debug=self.debug, _mock=_mock)
+        # Our API and our RBAC API are set in the super() __init__()
+        self.log = make_logger()
+        # We assume that we're using an LSST Authenticator, which will
+        #  therefore have an LSST MiddleManager.
+        #
+        # This might change with Argo Workflow.
+        self.lsst_mgr = self.user.authenticator.lsst_mgr
         # Add the LSST-specific logic by gluing in manager methods
         lm = self.lsst_mgr
         nm = lm.namespace_mgr
+        # Propagate our new config settings
         nm.delete_namespace_on_stop = self.delete_namespace_on_stop
-        nm.delete_namespaced_pvs_on_stop = self.delete_namespaced_pvs_on_stop
-        nm.duplicate_nfs_pvs_to_namespace = self.duplicate_nfs_pvs_to_namespace
         nm.enable_namespace_quotas = self.enable_namespace_quotas
-        self.optionsform_mgr = lm.optionsform_mgr
-        # Swap in our extended start and stop methods
-        #  And also our get_pod_manifest extensions
-        self._orig_stop = self.stop
-        self.stop = self._new_stop
-        self._orig_get_pod_manifest = self.get_pod_manifest
-        self.get_pod_manifest = self._new_get_pod_manifest
-
+        cfg = lm.config
         # Update fields
-        if os.getenv("RESTRICT_LAB_SPAWN"):
+        if cfg.restrict_lab_spawn:
             self.extra_labels["jupyterlab"] = "ok"
-        if os.getenv("ALLOW_DASK_SPAWN"):
+        if cfg.allow_dask_spawn:
             self.lab_service_account = "dask"
-        if _mock:
-            # Only do this during testing
-            pass
-        else:
-            # Normal initialization only
-            pass
 
     @property
     def options_form(self):
@@ -151,36 +93,23 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         #  can continue having multiple Jupyter instances in the same
         #  k8s cluster in different namespaces.  The user namespaces must
         #  themselves be namespaced, as it were.
-        if self.user and self.user.name:
-            uname = self.user.name
-            return defname + "-" + uname
+        if defname == "default":
+            # Or we're just running in the default namespace
+            return defname
+            return "{}-{}".format(defname, self.user.escaped_name())
         return defname
 
-    def _refresh_mynamespace(self):
-        self._mynamespace = self._get_mynamespace()
-
-    def _get_mynamespace(self):
-        ns_path = '/var/run/secrets/kubernetes.io/serviceaccount/namespace'
-        if os.path.exists(ns_path):
-            with open(ns_path) as f:
-                return f.read().strip()
-        return None
-
     @gen.coroutine
-    def _new_stop(self, now=False):
+    def stop(self, now=False):
         self.log.debug("Stopping; about to call original stop() method.")
-        _ = yield self._orig_stop(now)
+        _ = yield super().stop(now)
         self.log.debug("Returned from original stop().")
         if self.delete_namespace_on_stop:
-            self.lsst_mgr.propagate_user(self.user)
             nsm = self.lsst_mgr.namespace_mgr
-            vlm = self.lsst_mgr.volume_mgr
             self.log.debug("Attempting to delete namespace.")
             self.asynchronize(nsm.maybe_delete_namespace)
-            if self.delete_namespaced_pvs_on_stop:
-                self.asynchronize(vlm.destroy_namespaced_pvs)
         else:
-            self.log.debug("delete_namespace_on_stop not set.")
+            self.log.debug("'delete_namespace_on_stop' not set.")
 
     def options_from_form(self, formdata=None):
         options = None
@@ -200,10 +129,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         return options
 
     @gen.coroutine
-    def _new_get_pod_manifest(self):
+    def get_pod_manifest(self):
         # Extend pod manifest.  This is a monster method.
         # Run the superclass version, and then extract the fields
-        orig_pod = yield self._orig_get_pod_manifest()
+        orig_pod = yield super().get_pod_manifest()
         sc = orig_pod.spec.security_context
         uid = self.uid
         gid = self.gid
@@ -230,22 +159,26 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # from our environment manager:
         pod_env = self.get_env()
         em = self.lsst_mgr.env_mgr
+        cfg = self.lsst_mgr.config
         em.create_pod_env()
         pod_env.update(em.get_env())
-        self.log.debug("Pod env: %s" % json.dumps(pod_env,
-                                                  indent=4,
-                                                  sort_keys=True))
+        self.log.debug("Initial pod env: %s" % json.dumps(pod_env,
+                                                          indent=4,
+                                                          sort_keys=True))
         # If we do not have a UID for the user by now, we're sunk.
-        if not pod_env.get("EXTERNAL_UID"):
-            raise ValueError("EXTERNAL_UID is not set!")
+        uid = self.user.authenticator.get_uid()
+        if not uid:
+            raise ValueError("Cannot determine user uid!")
+        pod_env['EXTERNAL_UID'] = str(uid)
+        pod_env['EXTERNAL_GROUPS'] = self.lsst_mgr.auth_mgr.get_group_string()
 
         # Now we do the custom LSST stuff
 
         # Get image name
-        if os.getenv("ALLOW_DASK_SPAWN"):
+        if cfg.allow_dask_spawn:
             self.lab_service_account = "dask"
         pod_name = self.pod_name
-        image = (os.getenv("LAB_IMAGE") or
+        image = (cfg.lab_default_image or
                  self.image or
                  self.orig_pod.image or
                  "lsstsqre/sciplat-lab:latest")
@@ -266,9 +199,13 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             self.log.debug("user_options: " +
                            json.dumps(self.user_options, sort_keys=True,
                                       indent=4))
-            om = self.optionsform_mgr
             if self.user_options.get('kernel_image'):
                 image = self.user_options.get('kernel_image')
+                om = self.optionsform_mgr
+                size = self.user_options.get('size')
+                if size:
+                    image_size = om._sizemap[size]
+                clear_dotlocal = self.user_options.get('clear_dotlocal')
                 colon = image.find(':')
                 if colon > -1:
                     imgname = image[:colon]
@@ -289,15 +226,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                         if cit:
                             image = imgname + ":" + cit
                 self.log.info("Replacing image from options form: %s" % image)
-                size = self.user_options.get('size')
-                if size:
-                    image_size = om._sizemap[size]
-                clear_dotlocal = self.user_options.get('clear_dotlocal')
         else:
             self.log.warning("No user options found.  That seems wrong.")
         if clear_dotlocal:
             pod_env['CLEAR_DOTLOCAL'] = "TRUE"
-            em.set_env("CLEAR_DOTLOCAL", "TRUE")
         # Set up Lab pod resource constraints (not namespace quotas)
         mem_limit = em.get_env_key('LAB_MEM_LIMIT')
         cpu_limit = em.get_env_key('LAB_CPU_LIMIT')
@@ -308,50 +240,34 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         self.mem_limit = mem_limit
         self.cpu_limit = cpu_limit
         mem_guar = em.get_env_key('LAB_MEM_GUARANTEE')
-        if mem_guar is None:
-            mem_guar = '1M'
         cpu_guar = em.get_env_key('LAB_CPU_GUARANTEE')
-        if cpu_guar is None:
-            cpu_guar = 0.02
-        mem_guar = str(mem_guar)
         cpu_guar = float(cpu_guar)
         # Tiny gets the "basically nothing" above (or the explicit
         #  guarantee).  All others get 1/LAB_SIZE_RANGE times their
         #  maximum, with a default of 1/4.
         size_range = em.get_env_key('LAB_SIZE_RANGE')
-        if size_range is None:
-            size_range = 4.0
         size_range = float(size_range)
         if image_size and size != 'tiny':
             mem_guar = int(image_size["mem"] / size_range)
             cpu_guar = float(image_size["cpu"] / size_range)
         self.mem_guarantee = mem_guar
         self.cpu_guarantee = cpu_guar
-        # Figure out the image and set the pod name from it.
         self.log.debug("Image: {}".format(image))
-        pod_env['JUPYTER_IMAGE_SPEC'] = image
-        em.set_env('JUPYTER_IMAGE_SPEC', image)
         self.image = image
-        # Parse the image name + tag
-        i_l = image.split("/")
-        if len(i_l) == 1:
-            repo_tag = i_l[0]
-        else:
-            repo_tag = i_l[1]
-        repo = repo_tag.split(":")[0]
+        pod_env['JUPYTER_IMAGE_SPEC'] = image
+        em.update_env(pod_env)
+        # We don't care about the image name anymore: the user pod will
+        #  be named "nb" plus the username and tag, to keep the pod name
+        #  short.
         rt_tag = tag.replace('_', '-')
-        abbr_pn = repo
-        if repo == 'sciplat-lab':
-            # Saving characters because tags can be long
-            abbr_pn = "nb"
-        pn_template = abbr_pn + "-{username}-" + rt_tag
+        pn_template = "nb-{username}-" + rt_tag
         pod_name = self._expand_user_properties(pn_template)
         self.pod_name = pod_name
         self.log.info("Replacing pod name from options form: %s" %
                       pod_name)
         # Get volume definitions from volume manager.
-        self.volumes = self.lsst_mgr.volume_mgr.volumes
-        self.volume_mounts = self.lsst_mgr.volume_mgr.volume_mounts
+        self.volumes = self.lsst_mgr.volume_mgr.k8s_volumes
+        self.volume_mounts = self.lsst_mgr.volume_mgr.k8s_vol_mts
         # Generate the pod definition.
         self.log.debug("About to run make_pod()")
         pod = make_pod(

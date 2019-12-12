@@ -22,12 +22,13 @@ from .authenticator.lsstcilogonauth import LSSTCILogonOAuthenticator
 from .authenticator.lsstgithubauth import LSSTGitHubOAuthenticator
 from .authenticator.lsstjwtauth import LSSTJWTAuthenticator
 from .utils import (rreplace, sanitize_dict, get_execution_namespace,
-                    get_dummy_user, make_logger, github_api_headers,
-                    str_bool, list_duplicates)
+                    make_logger, str_bool, str_true, list_duplicates)
+from .config import LSSTConfig
+from .lsst_configure import lsst_configure
 from ._version import __version__
 all = [LSSTMiddleManager, Prepuller, Reaper, ScanRepo, Singleton,
        SingletonScanner, LSSTSpawner, LSSTCILogonOAuthenticator,
        LSSTGitHubOAuthenticator, LSSTJWTAuthenticator, rreplace,
-       sanitize_dict, get_execution_namespace, get_dummy_user,
-       make_logger, github_api_headers, str_bool, list_duplicates,
+       sanitize_dict, get_execution_namespace, make_logger, str_bool,
+       str_true, list_duplicates, LSSTConfig, lsst_configure,
        __version__]

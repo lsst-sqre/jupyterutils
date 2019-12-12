@@ -18,73 +18,28 @@ class LSSTNamespaceManager(object):
     rbac_api = None
     #
     quota_mgr = None
-    volume_mgr = None
     # These properties are set by the Spawner
     delete_namespace_on_stop = False
-    delete_namespaced_pvs_on_stop = False
-    duplicate_nfs_pvs_to_namespace = False
     enable_namespace_quotas = False
 
     def __init__(self, *args, **kwargs):
-        self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
-        self.log = make_logger(name=__name__, debug=self.debug)
-        self.log.debug("Creating LSSTEnvironmentManager")
-        self._mock = kwargs.pop('_mock', False)
-        self.defer_user = kwargs.pop('defer_user', False)
-        parent = kwargs.pop('parent', None)
-        self.parent = parent
-        user = kwargs.pop('user', None)
-        if not user:
-            if parent:
-                if hasattr(parent, 'user'):
-                    user = parent.user
-        if not user:
-            if self.defer_user:
-                self.log.info("No user specified; deferring as requested.")
-            else:
-                if self._mock:
-                    self.log.info("Mocking out user.")
-                    user = get_dummy_user()
-        if not user and not self.defer_user:
-            self.log.error("No user specified, and not asked to defer.")
-        self.user = user
-        self.update_namespace()
+        self.log = make_logger()
+        self.parent = kwargs.pop('parent')
+        self.user = self.parent.user
+        self.api = self.parent.api
+        self.rbac_api = self.parent.rbac_api
+        self.update_namespace_name()
         # Add an attribute for service account
         svc_acct = kwargs.pop('service_account', None)
         if not svc_acct:
-            if str_bool(os.getenv('ALLOW_DASK_SPAWN')):
+            if self.parent.config.allow_dask_spawn:
                 svc_acct = "dask"
         self.service_account = svc_acct
-        # And we need a Core API k8s client, if there isn't one yet.
-        api = kwargs.pop('api', None)
-        if not api:
-            if not self._mock:
-                config.load_incluster_config()
-                api = client.CoreV1Api()
-            else:
-                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
-        self.api = api
-        # May get reset by spawner
-        self.duplicate_nfs_pvs_to_namespace = kwargs.pop(
-            'duplicate_nfs_pvs_to_namespace', False)
-        self.delete_namespace_on_stop = kwargs.pop(
-            'delete_namespace_on_stop', False)
-        self.delete_namespaced_pvs_on_stop = kwargs.pop(
-            'delete_namespaced_pvs_on_stop', False)
-        self.enable_namespace_quotas = kwargs.pop(
-            'enable_namespace_quotas', False)
-        quota_mgr = kwargs.pop('quota_mgr', None)
-        if not quota_mgr:
-            if self.parent and hasattr(self.parent, "quota_mgr"):
-                quota_mgr = self.parent.quota_mgr
-        self.quota_mgr = quota_mgr
-        volume_mgr = kwargs.pop('volume_mgr', None)
-        if not volume_mgr:
-            if self.parent and hasattr(self.parent, "volume_mgr"):
-                volume_mgr = self.parent.volume_mgr
-        self.volume_mgr = volume_mgr
+        spawner = self.parent.spawner
+        self.delete_namespace_on_stop = spawner.delete_namespace_on_stop
+        self.enable_namespace_quotas = spawner.enable_namespace_quotas
 
-    def update_namespace(self):
+    def update_namespace_name(self):
         '''Build namespace name from user and execution namespace.
         '''
         execution_namespace = get_execution_namespace()
@@ -106,14 +61,7 @@ class LSSTNamespaceManager(object):
                                             username)
         else:
             df_msg = "Using 'default' namespace."
-            if self._mock:
-                self.log.debug("Couldn't get namespace, but _mock is set.")
-                self.log.debug(df_msg)
-            elif self.defer_user:
-                self.log.debug("Couldn't get namespace, but defer_user set.")
-                self.log.debug(df_msg)
-            else:
-                self.log.warning(df_msg)
+            self.log.warning(df_msg)
             self.namespace = "default"
 
     def ensure_namespace(self):
@@ -129,12 +77,11 @@ class LSSTNamespaceManager(object):
         within it to allow the user pod to spawn dask and workflow pods.
 
         '''
-        self.update_namespace()
+        self.update_namespace_name()
         namespace = self.namespace
         if namespace == "default":
             self.log.warning("Namespace is 'default'; no manipulation.")
             return
-        self.log.info("_ensure_namespace(): namespace '%s'" % namespace)
         ns = client.V1Namespace(
             metadata=client.V1ObjectMeta(name=namespace))
         try:
@@ -147,14 +94,6 @@ class LSSTNamespaceManager(object):
                 raise
             else:
                 self.log.info("Namespace '%s' already exists." % namespace)
-        if self.volume_mgr:
-            vm = self.volume_mgr
-            if self.duplicate_nfs_pvs_to_namespace:
-                self.log.debug("Duplicating NFS PVs to namespace.")
-                vm.replicate_nfs_pvs()
-                vm.create_pvcs_for_pvs()
-            else:
-                self.log.debug("Not duplicating NFS PVs to namespace.")
         if self.service_account:
             self.log.debug("Ensuring namespaced service account.")
             self._ensure_namespaced_service_account()
@@ -162,19 +101,16 @@ class LSSTNamespaceManager(object):
             self.log.debug("No namespaced service account required.")
         if self.enable_namespace_quotas:
             self.log.debug("Determining resource quota.")
-            if self.quota_mgr:
-                qm = self.quota_mgr
-                quota = qm.get_resource_quota_spec()
+            qm = self.quota_mgr
+            quota = qm.get_resource_quota_spec()
             if quota:
-                self.log.debug("Ensuring namespaced quota.")
+                self.log.debug("Ensuring namespace quota.")
                 qm.ensure_namespaced_resource_quota(quota)
             else:
-                self.log.debug("No namespaced quota required.")
-        else:
-            self.log.debug("No quota manager; cannot enable namespace quotas.")
+                self.log.debug("No namespace quota required.")
         self.log.debug("Namespace resources ensured.")
 
-    def _create_namespaced_account_objects(self):
+    def _define_namespaced_account_objects(self):
         # We may want these when and if we move Argo workflows into the
         #  deployment.
         #
@@ -241,7 +177,7 @@ class LSSTNamespaceManager(object):
         self.log.info("Ensuring namespaced service account.")
         namespace = self.namespace
         account = self.service_account
-        svcacct, role, rolebinding = self._create_namespaced_account_objects()
+        svcacct, role, rolebinding = self._define_namespaced_account_objects()
         if not svcacct:
             self.log.info("Service account not defined.")
             return
@@ -259,10 +195,6 @@ class LSSTNamespaceManager(object):
             else:
                 self.log.info("Service account '%s' " % account +
                               "in namespace '%s' already exists." % namespace)
-        if not self.rbac_api:
-            self.log.info("Attempting to create RBAC API Client.")
-            config.load_incluster_config()
-            self.rbac_api = client.RbacAuthorizationV1Api()
         try:
             self.log.info("Attempting to create role in namespace.")
             self.rbac_api.create_namespaced_role(
@@ -293,8 +225,8 @@ class LSSTNamespaceManager(object):
                               "already exists in '%s'." % namespace)
 
     def maybe_delete_namespace(self):
-        '''Here we try to delete the namespace.  If it has no running pods,
-        and it's not the default namespace, we can delete it."
+        '''Here we try to delete the namespace.  If it has no non-dask
+        running pods, and it's not the default namespace, we can delete it."
 
         This requires a cluster role that can delete namespaces.'''
         self.log.debug("Attempting to delete namespace.")
@@ -340,23 +272,6 @@ class LSSTNamespaceManager(object):
         dopts = client.V1DeleteOptions()
         self.log.info("Deleting resourcequota '%s'" % qname)
         self.api.delete_namespaced_resource_quota(qname, namespace, dopts)
-
-    def destroy_pvcs(self):
-        '''Remove PVCS from namespace.
-        You don't usually have to call this, since they will get
-        cleaned up as part of namespace deletion.
-        '''
-        namespace = self.get_user_namespace()
-        pvclist = self.api.list_namespaced_persistent_volume_claim(namespace)
-        if pvclist and pvclist.items and len(pvclist.items) > 0:
-            dopts = client.V1DeleteOptions()
-            for pvc in pvclist.items:
-                name = pvc.metadata.name
-                self.log.info("Deleting PVC '%s' " % name +
-                              "from namespace '%s'" % namespace)
-                self.api.delete_namespaced_persistent_volume_claim(name,
-                                                                   namespace,
-                                                                   dopts)
 
     def delete_namespaced_service_account_objects(self):
         '''Remove service accounts, roles, and rolebindings from namespace.

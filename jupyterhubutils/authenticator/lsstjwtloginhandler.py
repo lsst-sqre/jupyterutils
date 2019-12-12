@@ -29,7 +29,6 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         auth_state = yield self.refresh_user(user)
         _ = yield user.save_auth_state(auth_state)
         # Push the refreshed user through the managers
-        lm.propagate_user(user)
         if not am._check_groups_jwt(claims):
             # We're either in a forbidden group, or not in any allowed group
             self.log.error("User did not validate from claims groups.")
@@ -112,3 +111,37 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             self.log.error("JWT has expired!")
             raise web.HTTPError(401)
         return claims, token
+
+    def _check_groups_jwt(self, claims):
+        # Here is where we deviate from the vanilla JWT authenticator.
+        # We simply store all the JWT claims in auth_state, although we also
+        #  choose our field names to make the spawner reusable from the
+        #  OAuthenticator implementation.
+        # We will already have pulled the claims and token from the
+        #  auth header.
+        if not self._jwt_validate_user_from_claims_groups(claims):
+            # We're either in a forbidden group, or not in any allowed group
+            self.log.error("User did not validate from claims groups.")
+            return False
+        self.log.debug("Claims for user: {}".format(claims))
+        self.log.debug("Membership: {}".format(claims["isMemberOf"]))
+        gnames = [x["name"] for x in claims["isMemberOf"]]
+        self.log.debug("Setting authenticator groups: {}.".format(gnames))
+        self.authenticator.groups = gnames
+        self.groups = gnames
+        return True
+
+    def _jwt_validate_user_from_claims_groups(self, claims):
+        cfg = self.authenticator.lsst_mgr.config
+        alist = cfg.cilogon_group_whitelist
+        dlist = cfg.cilogon_group_whitelist
+        membership = [x["name"] for x in claims["isMemberOf"]]
+        intersection = list(set(dlist) & set(membership))
+        if intersection:
+            # User is in at least one forbidden group.
+            return False
+        intersection = list(set(alist) & set(membership))
+        if not intersection:
+            # User is not in at least one allowed group.
+            return False
+        return True

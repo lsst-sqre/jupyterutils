@@ -6,15 +6,15 @@ This module exports `NamespacedKubeSpawner` class, which is the spawner
 implementation that should be used by JupyterHub.
 '''
 
-import os
 from jupyterhub.utils import exponential_backoff
+from kubernetes import client
 from kubernetes.client.rest import ApiException
-from kubernetes import client, config
 from kubespawner import KubeSpawner
+from kubespawner.clients import shared_client
 from tornado import gen
 from tornado.ioloop import IOLoop
 from .multireflector import MultiNamespacePodReflector, EventReflector
-from ..utils import make_logger, str_bool
+from ..utils import make_logger
 
 
 class MultiNamespacedKubeSpawner(KubeSpawner):
@@ -25,30 +25,9 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
     rbac_api = None  # We need an RBAC client
 
     def __init__(self, *args, **kwargs):
-        _mock = kwargs.get('_mock', False)
         super().__init__(*args, **kwargs)
-        self._mock = _mock
-        self.debug = kwargs.pop('debug', str_bool(os.getenv('DEBUG')) or False)
-        self.log = make_logger(name=__name__, debug=self.debug)
-        if _mock:
-            self.log.debug("_mock enabled.")
-            return
-        api = kwargs.pop('api', None)
-        if not api:
-            if not self._mock:
-                config.load_incluster_config()
-                api = client.CoreV1Api()
-            else:
-                self.log.debug("No API, but _mock is set.  Leaving 'None'.")
-        self.api = api
-        rbac_api = kwargs.pop('rbac_api', None)
-        if not rbac_api:
-            if not self._mock:
-                config.load_incluster_config()
-                rbac_api = client.RbacAuthorizationV1Api()
-            else:
-                self.log.debug("No RBAC API, but _mock is set -> 'None'.")
-        self.rbac_api = rbac_api
+        self.log = make_logger()
+        self.rbac_api = shared_client('RbacAuthorizationV1Api')
 
         selected_pod_reflector_classref = MultiNamespacePodReflector
         selected_event_reflector_classref = EventReflector

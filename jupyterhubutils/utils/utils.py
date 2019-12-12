@@ -80,8 +80,7 @@ def github_api_headers(access_token):
 
 
 def str_bool(s):
-    '''Make a sane guess for whether a string represents a true or false
-    value.
+    '''Make a sane guess for whether a value represents true or false.
     '''
     if not s:
         return False
@@ -92,6 +91,16 @@ def str_bool(s):
     if s in ['false', '0', 'no', 'n']:
         return False
     return True
+
+
+def str_true(v):
+    '''The string representation of a true value will be 'TRUE'.  False will
+    be the empty string.
+    '''
+    if v:
+        return 'TRUE'
+    else:
+        return ''
 
 
 def list_duplicates(seq):
