@@ -100,6 +100,16 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         return defname
 
     @gen.coroutine
+    def _start(self):
+        # We want to wrap _start, not start, because we want the event
+        #  tracking from start.  All we need to do is ensure the resources
+        #  before we run the real thing.
+        self.log.debug("Starting; creating namespace and ancillary objects.")
+        self.lsst_mgr.ensure_resources()
+        self.log.debug("Starting; about to call original _start() method.")
+        _ = yield super().start()
+
+    @gen.coroutine
     def stop(self, now=False):
         self.log.debug("Stopping; about to call original stop() method.")
         _ = yield super().stop(now)

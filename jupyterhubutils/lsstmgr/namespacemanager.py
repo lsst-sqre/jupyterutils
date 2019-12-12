@@ -2,7 +2,7 @@
 '''
 
 import os
-
+import time
 from kubernetes.client.rest import ApiException
 from kubernetes import client, config
 
@@ -94,6 +94,9 @@ class LSSTNamespaceManager(object):
                 raise
             else:
                 self.log.info("Namespace '%s' already exists." % namespace)
+        # Wait for the namespace to actually appear before creating objects
+        #  in it.
+        self._wait_for_namespace()
         if self.service_account:
             self.log.debug("Ensuring namespaced service account.")
             self._ensure_namespaced_service_account()
@@ -223,6 +226,26 @@ class LSSTNamespaceManager(object):
             else:
                 self.log.info("Rolebinding '%s' " % account +
                               "already exists in '%s'." % namespace)
+
+    def _wait_for_namespace(self, timeout=30):
+        '''Wait for namespace to be created.'''
+        namespace = self.namespace
+        if namespace == "default":
+            return  # Default doesn't get manipulated
+        for dl in range(timeout):
+            self.log.debug("Checking for namespace " +
+                           "{} [{}/{}]".format(self.namespace, dl, timeout))
+            nl = self.api.list_namespace(timeout_seconds=1)
+            for ns in nl.items:
+                nsname = ns.metadata.name
+                if nsname == namespace:
+                    self.log.debug("Namespace {} found.".format(namespace))
+                    return
+                self.log.debug("Namespace {} not present yet.")
+            time.sleep(1)
+        raise RuntimeError(
+            "Namespace '{}' was not created in {} seconds!".format(namespace,
+                                                                   timeout))
 
     def maybe_delete_namespace(self):
         '''Here we try to delete the namespace.  If it has no non-dask
