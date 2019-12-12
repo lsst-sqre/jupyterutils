@@ -1,13 +1,11 @@
 '''LSST Authenticator to use JWT token present in request headers.
 '''
-import logging
-import os
 from jwtauthenticator.jwtauthenticator import JSONWebTokenAuthenticator
 from tornado import gen
 from .lsstjwtloginhandler import LSSTJWTLoginHandler
 from .lsstlogouthandler import LSSTLogoutHandler
 from ..config import LSSTConfig
-from ..utils import make_logger, str_bool
+from ..utils import make_logger
 from .. import LSSTMiddleManager
 
 
@@ -21,10 +19,8 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
     def __init__(self, *args, **kwargs):
         '''Add LSST Manager structure to hold LSST-specific logic.
         '''
-        debug = str_bool(os.getenv('DEBUG'))
-        if debug:
-            logging.basicConfig(level=logging.DEBUG)
         self.log = make_logger()
+        self.log.debug("Creating LSSTJWTAuthenticator")
         super().__init__(*args, **kwargs)
         self.lsst_mgr = LSSTMiddleManager(parent=self, config=LSSTConfig())
         auth_refresh = kwargs.pop('auth_refresh_age', None)
@@ -51,6 +47,7 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
             uid = str(uid)
         else:
             raise ValueError("Could not get UID from JWT!")
+        self.lsst_mgr.uid = uid
         update_env['EXTERNAL_UID'] = uid
         email = claims.get("email")
         if email:
@@ -59,15 +56,10 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
         grplist = self.map_groups(membership, update_env)
         update_env['EXTERNAL_GROUPS'] = grplist
         self.lsst_mgr.env_mgr.update_env(update_env)
+        yield self.lsst_mgr.pre_spawn_start(user, spawner)
 
     def logout_url(self, base_url):
         '''Returns the logout URL for JWT.  Assumes the LSST OAuth2
         JWT proxy.  Yes, it currently is 'sign_in'.  Blame BVan.
         '''
         return '/oauth2/sign_in'
-
-    @gen.coroutine
-    def get_uid(self):
-        ast = yield self.user.get_auth_state()
-        uid = ast["claims"]["uidNumber"]
-        return uid

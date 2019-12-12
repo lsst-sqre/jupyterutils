@@ -1,6 +1,7 @@
 import datetime
 import functools
 import json
+import logging
 import re
 import requests
 import semver
@@ -46,7 +47,10 @@ class ScanRepo(object):
                  insecure=False, sort_field="", debug=False):
         if debug:
             self.debug = debug
-        self.logger = make_logger(debug=self.debug)
+        self.logger = make_logger()
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+            self.logger.debug("Debug logging enabled.")
         if host:
             self.host = host
         if path:

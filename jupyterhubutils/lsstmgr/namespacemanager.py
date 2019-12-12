@@ -1,61 +1,32 @@
 '''Class to provide namespace manipulation.
 '''
 
-import os
 import time
 from kubernetes.client.rest import ApiException
-from kubernetes import client, config
+from kubernetes import client
 
-from ..utils import (get_execution_namespace,
-                     get_dummy_user, make_logger, str_bool)
+from ..utils import (get_execution_namespace, make_logger)
 
 
 class LSSTNamespaceManager(object):
     '''Class to provide namespace manipulation.
     '''
-    user = None
     namespace = None
-    rbac_api = None
-    #
-    quota_mgr = None
-    # These properties are set by the Spawner
-    delete_namespace_on_stop = False
-    enable_namespace_quotas = False
+    service_account = None
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
+        self.log.debug("Creating LSSTNamespaceManager")
         self.parent = kwargs.pop('parent')
-        self.user = self.parent.user
-        self.api = self.parent.api
-        self.rbac_api = self.parent.rbac_api
-        self.update_namespace_name()
-        # Add an attribute for service account
-        svc_acct = kwargs.pop('service_account', None)
-        if not svc_acct:
-            if self.parent.config.allow_dask_spawn:
-                svc_acct = "dask"
-        self.service_account = svc_acct
-        spawner = self.parent.spawner
-        self.delete_namespace_on_stop = spawner.delete_namespace_on_stop
-        self.enable_namespace_quotas = spawner.enable_namespace_quotas
 
     def update_namespace_name(self):
         '''Build namespace name from user and execution namespace.
         '''
         execution_namespace = get_execution_namespace()
         self.log.debug("Execution namespace: '{}'".format(execution_namespace))
-        user = self.user
+        user = self.parent.user
         self.log.debug("User: '{}'".format(user))
-        username = None
-        if user:
-            try:
-                um = user.escaped_name
-                if callable(um):
-                    username = um()
-                else:
-                    username = um
-            except AttributeError:
-                self.log.debug("User has no escaped_name() method.")
+        username = user.escaped_name
         if execution_namespace and username:
             self.namespace = "{}-{}".format(execution_namespace,
                                             username)
@@ -79,6 +50,7 @@ class LSSTNamespaceManager(object):
         '''
         self.update_namespace_name()
         namespace = self.namespace
+        api = self.parent.api
         if namespace == "default":
             self.log.warning("Namespace is 'default'; no manipulation.")
             return
@@ -86,7 +58,7 @@ class LSSTNamespaceManager(object):
             metadata=client.V1ObjectMeta(name=namespace))
         try:
             self.log.info("Attempting to create namespace '%s'" % namespace)
-            self.api.create_namespace(ns)
+            api.create_namespace(ns)
         except ApiException as e:
             if e.status != 409:
                 estr = "Create namespace '%s' failed: %s" % (ns, str(e))
@@ -102,9 +74,9 @@ class LSSTNamespaceManager(object):
             self._ensure_namespaced_service_account()
         else:
             self.log.debug("No namespaced service account required.")
-        if self.enable_namespace_quotas:
+        if self.parent.spawner.enable_namespace_quotas:
             self.log.debug("Determining resource quota.")
-            qm = self.quota_mgr
+            qm = self.parent.quota_mgr
             quota = qm.get_resource_quota_spec()
             if quota:
                 self.log.debug("Ensuring namespace quota.")
@@ -179,6 +151,8 @@ class LSSTNamespaceManager(object):
         #  to manipulate pods in the namespace.
         self.log.info("Ensuring namespaced service account.")
         namespace = self.namespace
+        api = self.parent.api
+        rbac_api = self.parent.rbac_api
         account = self.service_account
         svcacct, role, rolebinding = self._define_namespaced_account_objects()
         if not svcacct:
@@ -186,7 +160,7 @@ class LSSTNamespaceManager(object):
             return
         try:
             self.log.info("Attempting to create service account.")
-            self.api.create_namespaced_service_account(
+            api.create_namespaced_service_account(
                 namespace=namespace,
                 body=svcacct)
         except ApiException as e:
@@ -200,7 +174,7 @@ class LSSTNamespaceManager(object):
                               "in namespace '%s' already exists." % namespace)
         try:
             self.log.info("Attempting to create role in namespace.")
-            self.rbac_api.create_namespaced_role(
+            rbac_api.create_namespaced_role(
                 namespace,
                 role)
         except ApiException as e:
@@ -214,7 +188,7 @@ class LSSTNamespaceManager(object):
                               "already exists in namespace '%s'." % namespace)
         try:
             self.log.info("Attempting to create rolebinding in namespace.")
-            self.rbac_api.create_namespaced_role_binding(
+            rbac_api.create_namespaced_role_binding(
                 namespace,
                 rolebinding)
         except ApiException as e:
@@ -235,7 +209,7 @@ class LSSTNamespaceManager(object):
         for dl in range(timeout):
             self.log.debug("Checking for namespace " +
                            "{} [{}/{}]".format(self.namespace, dl, timeout))
-            nl = self.api.list_namespace(timeout_seconds=1)
+            nl = self.parent.api.list_namespace(timeout_seconds=1)
             for ns in nl.items:
                 nsname = ns.metadata.name
                 if nsname == namespace:
@@ -257,7 +231,7 @@ class LSSTNamespaceManager(object):
         if namespace == "default":
             self.log.warning("Cannot delete 'default' namespace")
             return
-        podlist = self.api.list_namespaced_pod(namespace)
+        podlist = self.parent.api.list_namespaced_pod(namespace)
         clear_to_delete = True
         if podlist and podlist.items and len(podlist.items) > 0:
             clear_to_delete = self._check_pods(podlist.items)
@@ -266,7 +240,7 @@ class LSSTNamespaceManager(object):
             return False
         self.log.info("Clear to delete namespace '%s'" % namespace)
         self.log.info("Deleting namespace '%s'" % namespace)
-        self.api.delete_namespace(namespace)
+        self.parent.api.delete_namespace(namespace)
         return True
 
     def _check_pods(self, items):
@@ -291,10 +265,11 @@ class LSSTNamespaceManager(object):
         cleaned up as part of namespace deletion.
         '''
         namespace = self.get_user_namespace()
+        api = self.parent.api
         qname = "quota-" + namespace
         dopts = client.V1DeleteOptions()
         self.log.info("Deleting resourcequota '%s'" % qname)
-        self.api.delete_namespaced_resource_quota(qname, namespace, dopts)
+        api.delete_namespaced_resource_quota(qname, namespace, dopts)
 
     def delete_namespaced_service_account_objects(self):
         '''Remove service accounts, roles, and rolebindings from namespace.
@@ -309,15 +284,15 @@ class LSSTNamespaceManager(object):
         dopts = client.V1DeleteOptions()
         self.log.info("Deleting service accounts/role/rolebinding " +
                       "for %s" % namespace)
-        self.rbac_api.delete_namespaced_role_binding(
+        self.parent.rbac_api.delete_namespaced_role_binding(
             account,
             namespace,
             dopts)
-        self.rbac_api.delete_namespaced_role(
+        self.parent.rbac_api.delete_namespaced_role(
             account,
             namespace,
             dopts)
-        self.api.delete_namespaced_service_account(
+        self.parent.api.delete_namespaced_service_account(
             account,
             namespace,
             dopts)

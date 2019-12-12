@@ -10,24 +10,14 @@ from ..utils import make_logger, list_duplicates
 
 
 class LSSTAuthManager(object):
-    spawner = None
     authenticator = None
-    username = None
-    uid = None
     group_map = {}  # key is group name, value is group id
 
     def __init__(self, *args, **kwargs):
-        self.log = make_logger(name=__name__, debug=self.debug)
+        self.log = make_logger()
+        self.log.debug("Creating LSSTAuthManager.")
         self.parent = kwargs.pop('parent')
-        self.config = self.parent.config
-        self.api = self.parent.api
         self.authenticator = self.parent.authenticator
-        self.spawner = self.parent.spawner
-        self.user = self.parent.user
-        self.username = self.parent.username
-        self.auth_provider = self.config.auth_provider
-        self.groups = self.authenticator.groups
-        self.uid = self.authenticator.get_uid()
 
     def _group_merge(self, groups_1, groups_2):
         # First just merge them

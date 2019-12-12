@@ -1,6 +1,7 @@
 import argparse
 import copy
 import json
+import logging
 import os
 import signal
 import sys
@@ -53,8 +54,10 @@ class Prepuller(object):
             self.args = args
         if self.args and self.args.debug:
             self.debug = True
-        self.logger = make_logger(debug=self.debug)
-        self.logger.debug("Debug logging on.")
+        self.logger = make_logger()
+        if self.debug:
+            self.logger.setLevel(logging.DEBUG)
+            self.logger.debug("Debug logging enabled.")
         namespace = None
         try:
             config.load_incluster_config()

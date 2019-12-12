@@ -2,13 +2,11 @@
 authentication logic to its auth_mgr.
 '''
 import json
-import logging
 import oauthenticator
-import os
 from tornado import gen
 from .. import LSSTMiddleManager
 from ..config import LSSTConfig
-from ..utils import make_logger, str_bool, sanitize_dict
+from ..utils import make_logger, sanitize_dict
 
 
 class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
@@ -18,10 +16,8 @@ class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
     _default_domain = None
 
     def __init__(self, *args, **kwargs):
-        debug = str_bool(os.getenv('DEBUG'))
-        if debug:
-            logging.basicConfig(level=logging.DEBUG)
         self.log = make_logger()
+        self.log.debug("Creating LSSTCILogonOAuthenticator")
         super().__init__(*args, **kwargs)
         self.lsst_mgr = LSSTMiddleManager(parent=self, config=LSSTConfig())
 
@@ -48,6 +44,8 @@ class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
                     domain != self._default_domain):
                 username = username + "." + domain
             userdict["name"] = username
+        uid = ast["cilogon_user"]["uidNumber"]
+        self.lsst_mgr.uid = uid
         return userdict
 
     def _set_group_records(self, auth_state):
@@ -58,7 +56,7 @@ class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
             name = rec["name"]
             gnames.append(name)
             gid = rec.get("id")
-            if not gid and not self.lsst_mrg.config.strict_ldap_groups:
+            if not gid and not self.lsst_mgr.config.strict_ldap_groups:
                 gid = self.lsst_mgr.auth_mgr.get_fake_gid()
             if gid:
                 groupmap[name] = gid
@@ -83,7 +81,7 @@ class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
         return True
 
     @gen.coroutine
-    def pre_spawn_start(self):
+    def pre_spawn_start(self, user, spawner):
         update_env = {}
         auth_state = yield self.user.get_auth_state()
         user_rec = auth_state["cilogon_user"]
@@ -102,9 +100,4 @@ class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
                                                     indent=4,
                                                     sort_keys=True))
         self.lsst_mgr.env_mgr.update_env(update_env)
-
-    @gen.coroutine
-    def get_uid(self):
-        ast = yield self.user.get_auth_state()
-        uid = ast["cilogon_user"]["uidNumber"]
-        return uid
+        yield self.lsst_mgr.pre_spawn_start(user, spawner)

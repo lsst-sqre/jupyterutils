@@ -2,15 +2,13 @@
 authentication to its auth_mgr.
 '''
 import json
-import logging
 import oauthenticator
-import os
 from oauthenticator.common import next_page_from_links
 from tornado import gen
 from tornado.httpclient import HTTPRequest, AsyncHTTPClient, HTTPError
 from .. import LSSTMiddleManager
 from ..config import LSSTConfig
-from ..utils import make_logger, str_bool, sanitize_dict
+from ..utils import make_logger, sanitize_dict
 
 
 def github_api_headers(access_token):
@@ -28,13 +26,13 @@ class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
     user_groups = []
 
     def __init__(self, *args, **kwargs):
-        debug = str_bool(os.getenv('DEBUG'))
-        if debug:
-            logging.basicConfig(level=logging.DEBUG)
         self.log = make_logger()
+        self.log.debug("Creating LSSTGitHubOAuthenticator.")
         super().__init__(*args, **kwargs)
+        self.log.debug("Superclass authenticator created.")
         self.lsst_mgr = LSSTMiddleManager(parent=self, config=LSSTConfig())
 
+    @gen.coroutine
     def authenticate(self, handler, data=None):
         self.log.info("Authenticating user against GitHub.")
         userdict = yield super().authenticate(handler, data)
@@ -47,7 +45,7 @@ class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
             self._set_groups_from_github_token(token)
         else:
             self.log.debug("No token found.")
-        denylist = os.environ.get('GITHUB_ORGANIZATION_DENYLIST')
+        denylist = self.lsst_mgr.config.github_denylist
         if denylist:
             if not token:
                 self.log.warning("User does not have access token.")
@@ -59,13 +57,8 @@ class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
             if denied:
                 self.log.warning("Rejecting user: denylisted")
                 userdict = None
+        self.lsst_mgr.uid = userdict["auth_state"]["github_user"]["id"]
         return userdict
-
-    @gen.coroutine
-    def get_uid(self):
-        ast = yield self.user.get_auth_state()
-        uid = ast["github_user"]["id"]
-        return uid
 
     @gen.coroutine
     def _set_groups_from_github_token(self, token):
@@ -103,13 +96,15 @@ class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
         # Requires 'read:org' token scope.
         http_client = AsyncHTTPClient()
         headers = github_api_headers(access_token)
-        next_page = "https://%s/user/orgs" % (self.github_api)
+        gh_api = self.lsst_mgr.config.github_api
+        next_page = "https://{}/user/orgs".format(gh_api)
         orgmap = {}
         while next_page:
             req = HTTPRequest(next_page, method="GET", headers=headers)
             try:
                 resp = yield http_client.fetch(req)
-            except HTTPError:
+            except HTTPError as exc:
+                self.log.error("{} -> {}".format(next_page, exc))
                 return None
             resp_json = json.loads(resp.body.decode('utf8', 'replace'))
             next_page = next_page_from_links(resp)
@@ -126,7 +121,8 @@ class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
         #  scope
         http_client = AsyncHTTPClient()
         headers = github_api_headers(access_token)
-        next_page = "https://%s/user/emails" % (self.github_api)
+        gh_api = self.lsst_mgr.config.github_api
+        next_page = "https://{}/user/emails".format(gh_api)
         while next_page:
             req = HTTPRequest(next_page, method="GET", headers=headers)
             resp = yield http_client.fetch(req)
@@ -171,3 +167,4 @@ class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
                                                     indent=4,
                                                     sort_keys=True))
         self.lsst_mgr.env_mgr.update_env(update_env)
+        yield self.lsst_mgr.pre_spawn_start(user, spawner)

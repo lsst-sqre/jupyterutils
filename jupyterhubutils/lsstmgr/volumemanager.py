@@ -12,7 +12,6 @@ from kubernetes import client
 
 
 class LSSTVolumeManager(object):
-    namespace_mgr = None
     volume_list = []
     k8s_volumes = []
     k8s_vol_mts = []
@@ -21,9 +20,6 @@ class LSSTVolumeManager(object):
         self.log = make_logger()
         self.log.debug("Creating LSSTVolumeManager")
         self.parent = kwargs.pop('parent')
-        self.user = self.parent.user
-        self.namespace_mgr = self.parent.namespace_mgr
-        self.make_volumes_from_config()
 
     def make_volumes_from_config(self):
         '''Create volume definition representation from document.
@@ -177,7 +173,7 @@ class LSSTVolumeManager(object):
         '''
         vmt_yaml = self._get_volume_mount_yaml(left_pad=4)
         vol_yaml = self._get_volume_yaml(left_pad=2)
-        ystr = vmt_yaml + vol_yaml
+        ystr = vmt_yaml + "\n" + vol_yaml
         self.log.debug("Dask yaml:\n%s" % ystr)
         benc = base64.b64encode(ystr.encode('utf-8')).decode('utf-8')
         return benc

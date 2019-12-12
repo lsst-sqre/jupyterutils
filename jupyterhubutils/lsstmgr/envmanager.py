@@ -6,17 +6,12 @@ from ..utils import make_logger, str_true, sanitize_dict
 
 
 class LSSTEnvironmentManager(object):
-    _stashed_kwargs = None
-    quota_mgr = None
-    volume_mgr = None
     pod_env = {}
 
     def __init__(self, *args, **kwargs):
-        self._stashed_kwargs = kwargs
         self.log = make_logger()
         self.log.debug("Creating LSSTEnvironmentManager")
         self.parent = kwargs.pop('parent')
-        self.refresh_pod_env()
 
     def refresh_pod_env(self):
         '''Return a dict mapping string to string for injection into the
@@ -29,14 +24,14 @@ class LSSTEnvironmentManager(object):
         env['CPU_LIMIT'] = cfg.cpu_limit
         # FIXME
         # Workaround for a bug in our dask templating.
-        mem_g = cfg.lab_mem_guarantee
+        mem_g = cfg.mem_guarantee
         env['MEM_GUARANTEE'] = self._mem_workaround(mem_g)
         env['CPU_GUARANTEE'] = cfg.cpu_guarantee
         env['LAB_SIZE_RANGE'] = cfg.lab_size_range
-        env['CULL_TIMEOUT'] = cfg.lab_cull_timeout
-        env['CULL_POLICY'] = cfg.lab_cull_policy
+        env['CULL_TIMEOUT'] = cfg.cull_timeout
+        env['CULL_POLICY'] = cfg.cull_policy
         env['RESTRICT_DASK_NODES'] = str_true(cfg.restrict_dask_nodes)
-        env['LAB_NODEJS_MAX_MEM'] = cfg.lab_node_js_max_mem
+        env['LAB_NODEJS_MAX_MEM'] = cfg.lab_nodejs_max_mem
         env['NODE_OPTIONS'] = cfg.lab_node_options
         env['EXTERNAL_HUB_URL'] = cfg.external_hub_url
         env['HUB_ROUTE'] = cfg.hub_route

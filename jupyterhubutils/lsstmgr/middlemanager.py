@@ -6,13 +6,8 @@ to perform all LSST-specific operations, reducing configuration
 complexity.
 '''
 
-import os
-
-from jupyterhub.auth import Authenticator
-from jupyterhub.spawner import Spawner
-from kubernetes import client, config
-
-from ..utils import get_dummy_user, make_logger, str_bool
+from tornado import gen
+from ..utils import make_logger
 
 from .authmanager import LSSTAuthManager
 from .envmanager import LSSTEnvironmentManager
@@ -23,9 +18,14 @@ from .volumemanager import LSSTVolumeManager
 
 
 class LSSTMiddleManager(object):
+    parent = None
     authenticator = None
     spawner = None
-    parent = None
+    user = None
+    username = None
+    uid = None
+    api = None
+    rbacapi = None
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
@@ -34,13 +34,7 @@ class LSSTMiddleManager(object):
         self.log.info(
             "Parent of LSST Middle Manager is '{}'".format(self.parent))
         self.config = kwargs.pop('config')
-        self.user = self.parent.user
         self.authenticator = self.parent
-        self.spawner = self.parent.spawner
-        if self.spawner:
-            self.log.debug("Attempting to set API and RBAC_API from spawner.")
-            self.api = self.spawner.api
-            self.rbac_api = self.spawner.rbac_api
         self.auth_mgr = LSSTAuthManager(parent=self)
         self.env_mgr = LSSTEnvironmentManager(parent=self)
         self.namespace_mgr = LSSTNamespaceManager(parent=self)
@@ -53,3 +47,21 @@ class LSSTMiddleManager(object):
         manager for PV manipulation).
         '''
         self.namespace_mgr.ensure_namespace()
+
+    @gen.coroutine
+    def pre_spawn_start(self, user, spawner):
+        '''Update manager attributes now that we have user and spawner.
+        '''
+        # Run methods that depend on the managers having all been
+        #  initialized and then having been given user/spawner info
+        self.log.debug("Updating subordinate managers.")
+        self.volume_mgr.make_volumes_from_config()
+        self.env_mgr.refresh_pod_env()
+        self.namespace_mgr.update_namespace_name()
+        self.spawner.namespace = self.namespace_mgr.namespace
+        if self.config.allow_dask_spawn:
+            self.namespace_mgr.service_account = "dask"
+
+    @gen.coroutine
+    def get_uid(self):
+        return self.uid

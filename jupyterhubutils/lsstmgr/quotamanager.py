@@ -10,36 +10,23 @@ from ..utils import make_logger
 
 
 class LSSTQuotaManager(object):
-    log = None
-    auth_mgr = None
-    namespace_mgr = None
-    optionsform_mgr = None
-    user = None
-    api = None
-    groups = None
     quota = {}
     _custom_resources = {}
+    resourcemap = None
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
         self.log.debug("Creating LSSTQuotaManager")
         self.parent = kwargs.pop('parent')
-        self.user = self.parent.user
-        self.groups = self.parent.spawner.groups
-        self.api = self.parent.api
-        self.resourcemap = self._read_resource_map()
 
-    def _read_resource_map(self, resource_file=None):
+    def read_resource_map(self, resource_file=None):
         rfile = "/opt/lsst/software/jupyterhub/resources/resourcemap.json"
         if not resource_file:
             resource_file = rfile
         if not os.path.exists(resource_file):
             nf_msg = ("Could not find resource definition file" +
                       " at '{}'".format(resource_file))
-            if self._mock:
-                self.log.debug(nf_msg + ", but _mock is set.")
-            else:
-                self.log.warning(nf_msg)
+            self.log.error(nf_msg)
             return None
         with open(resource_file, "r") as rf:
             resmap = json.load(rf)
@@ -49,15 +36,17 @@ class LSSTQuotaManager(object):
         '''Create custom resource definitions for user.
         '''
         if not self.resourcemap:
-            self.log.warning("No resources map found.")
-            return
+            self.log.info("No resource map found; generating.")
+            self.resourcemap = self.read_resource_map()
+            if not self.resourcemap:
+                return
         resources = {
             "size_index": 0,
             "cpu_quota": 0,
             "mem_quota": 0
         }
-        gnames = self.groups
-        uname = self.user.name
+        gnames = self.parent.user.groups
+        uname = self.parent.user.escaped_name
         for resdef in self.resourcemap:
             apply = False
             if resdef.get("disabled"):
@@ -95,7 +84,7 @@ class LSSTQuotaManager(object):
         '''
         self.log.debug("Entering get_resource_quota_spec()")
         self.log.info("Calculating default resource quotas.")
-        big_multiplier = 2 ** (len(self.parent.optionsform_mgr.sizelist) - 1)
+        big_multiplier = 2 ** (len(self.parent.optionsform_mgr._sizelist) - 1)
         cfg = self.parent.config
         max_dask_workers = cfg.max_dask_workers
         tiny_cpu = cfg.tiny_cpu
@@ -129,6 +118,7 @@ class LSSTQuotaManager(object):
         '''
         self.log.info("Entering ensure_namespaced_resource_quota()")
         namespace = self.parent.namespace_mgr.namespace
+        api = self.parent.api
         if namespace == "default":
             self.log.error("Will not create quota for default namespace!")
             return
@@ -140,7 +130,7 @@ class LSSTQuotaManager(object):
         )
         self.log.info("Creating quota: %r" % quota)
         try:
-            self.api.create_namespaced_resource_quota(namespace, quota)
+            api.create_namespaced_resource_quota(namespace, quota)
         except ApiException as e:
             if e.status != 409:
                 self.log.exception("Create resourcequota '%s'" % quota +
@@ -155,7 +145,9 @@ class LSSTQuotaManager(object):
         # You don't usually have to call this, since it will get
         #  cleaned up as part of namespace deletion.
         namespace = self.parent.namespace_mgr.namespace
+        api = self.parent.api
         qname = "quota-" + namespace
         dopts = client.V1DeleteOptions()
         self.log.info("Deleting resourcequota '%s'" % qname)
-        self.api.delete_namespaced_resource_quota(qname, namespace, dopts)
+        api.delete_namespaced_resource_quota(
+            qname, namespace, dopts)

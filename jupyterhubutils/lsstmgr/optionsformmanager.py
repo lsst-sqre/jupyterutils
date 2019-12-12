@@ -3,10 +3,7 @@
 import datetime
 import jinja2
 import json
-import os
-
 from time import sleep
-
 from .. import SingletonScanner
 from ..utils import make_logger
 
@@ -15,9 +12,8 @@ class LSSTOptionsFormManager(object):
     '''Class to create and read a spawner form.
     '''
 
-    quota_mgr = None
-    sizelist = ["tiny", "small", "medium", "large"]
     _sizemap = {}
+    _sizelist = []
     _scanner = None
 
     def __init__(self, *args, **kwargs):
@@ -59,17 +55,17 @@ class LSSTOptionsFormManager(object):
         if not now.tzinfo:
             # If we don't have tzinfo, assume it's in UTC
             nowstr += " UTC"
-        self._make_sizemap()
-        template_loader = jinja2.FileSystemLoader()
-        template_environment = jinja2.Environment(loader=template_loader)
+        self._make_sizemap_and_list()
         template_file = self.parent.config.form_template
+        template_loader = jinja2.FileSystemLoader(searchpath='/')
+        template_environment = jinja2.Environment(loader=template_loader)
         template = template_environment.get_template(template_file)
         optform = template.render(
             defaultsize=cfg.size_index,
             desclist=desclist,
             all_tags=all_tags,
             custtag=custtag,
-            sizemap=self._sizemap,
+            sizelist=self._sizelist,
             nowstr=nowstr)
         return optform
 
@@ -94,14 +90,10 @@ class LSSTOptionsFormManager(object):
                           "{}s.".format(max_delay))
                 raise RuntimeError(errstr)
 
-    def _make_sizemap(self):
-        sizes = self.sizelist
-        tiny_cpu = os.environ.get('TINY_MAX_CPU') or 0.5
-        if type(tiny_cpu) is str:
-            tiny_cpu = float(tiny_cpu)
-        mem_per_cpu = os.environ.get('MB_PER_CPU') or 2048
-        if type(mem_per_cpu) is str:
-            mem_per_cpu = int(mem_per_cpu)
+    def _make_sizemap_and_list(self):
+        sizes = self.parent.config.form_sizelist
+        tiny_cpu = self.parent.config.tiny_cpu
+        mem_per_cpu = self.parent.config.mb_per_cpu
         cpu = tiny_cpu
         for sz in sizes:
             mem = mem_per_cpu * cpu
@@ -115,13 +107,17 @@ class LSSTOptionsFormManager(object):
         for esz in sls:
             if esz not in sizes:
                 del self._sizemap[esz]
+        self._sizelist = []
+        for name in self._sizemap:
+            self._sizelist.append({"name": name,
+                                   "desc": self._sizemap[name]["desc"]})
 
     def _get_size_index(self):
         sizes = list(self._sizemap.keys())
         cfg = self.parent.config
         cr = None
-        if self.quota_mgr:
-            cr = self.quota_mgr._custom_resources
+        if self.parent.quota_mgr:
+            cr = self.parent.quota_mgr._custom_resources
         if cr is None:
             cr = {}
         si = cr.get("size_index") or cfg.size_index

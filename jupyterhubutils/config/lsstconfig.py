@@ -43,9 +43,8 @@ class LSSTConfig(metaclass=Singleton):
         self.cilogon_host = os.getenv('CILOGON_HOST') or 'cilogon.org'
         self.cilogon_skin = os.getenv('CILOGON_SKIN') or 'LSST'
         self.cilogon_idp = os.getenv('CILOGON_IDP_SELECTION')
-        self.strict_ldap_groups = os.getenv('STRICT_LDAP_GROUPS')
-
-        self.github_host = os.getenv('GITHUB_HOST')
+        self.strict_ldap_groups = str_bool(os.getenv('STRICT_LDAP_GROUPS'))
+        self.github_host = os.getenv('GITHUB_HOST') or 'github.com'
         self.github_denylist = os.getenv('GITHUB_ORGANIZATION_DENYLIST')
         # Settings for Options Form
         self.form_selector_title = (os.getenv('LAB_SELECTOR_TITLE') or
@@ -53,6 +52,10 @@ class LSSTConfig(metaclass=Singleton):
         self.form_template = (os.getenv('OPTIONS_FORM_TEMPLATE') or
                               ('/opt/lsst/software/jupyterhub/templates/' +
                                'options_form.template.html'))
+        self.form_sizelist = ['tiny', 'small', 'medium', 'large']
+        sizestr = os.getenv('OPTIONS_FORM_SIZELIST')
+        if sizestr:
+            self.form_sizelist = sizestr.split(',')
         self.tiny_cpu = float(os.getenv('TINY_MAX_CPU', 0.5))
         self.mb_per_cpu = int(os.getenv('MB_PER_CPU', 2048))
         self.size_index = int(os.getenv('SIZE_INDEX', 1))
@@ -127,7 +130,7 @@ class LSSTConfig(metaclass=Singleton):
     def create_derived_settings(self):
         '''Create further settings from passed-in ones.
         '''
-        self.proxy_api_url = 'http://{}.{}'.format(
+        self.proxy_api_url = 'http://{}:{}'.format(
             self.proxy_host, self.proxy_api_port)
         if self.github_host == 'github.com':
             self.github_api = 'api.github.com'

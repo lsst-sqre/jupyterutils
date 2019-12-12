@@ -6,7 +6,6 @@ from .multispawner import MultiNamespacedKubeSpawner
 from kubespawner.objects import make_pod
 from tornado import gen
 from traitlets import Bool
-
 from ..utils import make_logger
 
 
@@ -60,30 +59,37 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     ).tag(config=True)
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Our API and our RBAC API are set in the super() __init__()
         self.log = make_logger()
-        # We assume that we're using an LSST Authenticator, which will
-        #  therefore have an LSST MiddleManager.
-        #
-        # This might change with Argo Workflow.
-        self.lsst_mgr = self.user.authenticator.lsst_mgr
-        # Add the LSST-specific logic by gluing in manager methods
-        lm = self.lsst_mgr
-        nm = lm.namespace_mgr
-        # Propagate our new config settings
-        nm.delete_namespace_on_stop = self.delete_namespace_on_stop
-        nm.enable_namespace_quotas = self.enable_namespace_quotas
-        cfg = lm.config
-        # Update fields
-        if cfg.restrict_lab_spawn:
-            self.extra_labels["jupyterlab"] = "ok"
-        if cfg.allow_dask_spawn:
-            self.lab_service_account = "dask"
+        self.log.debug("Creating LSSTSpawner.")
+        super().__init__(*args, **kwargs)
+    # Our API and our RBAC API are set in the super() __init__()
+    # We assume that we're using an LSST Authenticator, which will
+    #  therefore have an LSST MiddleManager.
+    #
+    # This might change with Argo Workflow.
 
     @property
     def options_form(self):
-        return self.optionsform_mgr.lsst_options_form()
+        '''Present an LSST-tailored options form.'''
+        # Weird place to stitch up the LSST Manager, huh?
+        # This is the last place we can do it, because we need one for
+        #  the options form.
+        self.log.info("Updating LSSR manager with spawner information.")
+        self._set_lsst_mgr()
+        # We may want to know about the user's resource limits for the
+        #  option form.
+        self.lsst_mgr.quota_mgr.set_custom_user_resources()
+        return self.lsst_mgr.optionsform_mgr.lsst_options_form()
+
+    def _set_lsst_mgr(self):
+        self.log.info("Setting LSST Manager from authenticated user.")
+        lm = self.user.authenticator.lsst_mgr
+        self.lsst_mgr = lm
+        lm.spawner = self
+        lm.user = self.user
+        lm.username = self.user.escaped_name
+        lm.api = self.api
+        lm.rbac_api = self.rbac_api
 
     def get_user_namespace(self):
         '''Return namespace for user pods (and ancillary objects).
@@ -96,18 +102,16 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         if defname == "default":
             # Or we're just running in the default namespace
             return defname
-            return "{}-{}".format(defname, self.user.escaped_name())
+            return "{}-{}".format(defname, self.user.escaped_name)
         return defname
 
-    @gen.coroutine
-    def _start(self):
-        # We want to wrap _start, not start, because we want the event
-        #  tracking from start.  All we need to do is ensure the resources
-        #  before we run the real thing.
+    def start(self):
+        # All we need to do is ensure the resources before we run the
+        #  superclass method
         self.log.debug("Starting; creating namespace and ancillary objects.")
         self.lsst_mgr.ensure_resources()
-        self.log.debug("Starting; about to call original _start() method.")
-        _ = yield super().start()
+        retval = super().start()
+        return retval
 
     @gen.coroutine
     def stop(self, now=False):
@@ -143,20 +147,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # Extend pod manifest.  This is a monster method.
         # Run the superclass version, and then extract the fields
         orig_pod = yield super().get_pod_manifest()
-        sc = orig_pod.spec.security_context
-        uid = self.uid
-        gid = self.gid
-        fs_gid = self.fs_gid
-        supplemental_gids = self.supplemental_gids
-        if hasattr(sc, "run_as_uid") and sc.run_as_uid is not None:
-            uid = sc.run_as_uid
-        if hasattr(sc, "run_as_gid") and sc.run_as_gid is not None:
-            gid = sc.run_as_gid
-        if hasattr(sc, "fs_group") and sc.fs_group is not None:
-            fs_gid = sc.fs_group
-        if hasattr(sc, "supplemental_groups"):
-            if sc.supplemental_groups is not None:
-                supplemental_gids = sc.supplemental_groups
+        self.log.debug("Original pod: {}".format(orig_pod))
         labels = orig_pod.metadata.labels.copy()
         annotations = orig_pod.metadata.annotations.copy()
         ctrs = orig_pod.spec.containers
@@ -170,21 +161,20 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         pod_env = self.get_env()
         em = self.lsst_mgr.env_mgr
         cfg = self.lsst_mgr.config
-        em.create_pod_env()
+        em.refresh_pod_env()
         pod_env.update(em.get_env())
         self.log.debug("Initial pod env: %s" % json.dumps(pod_env,
                                                           indent=4,
                                                           sort_keys=True))
-        # If we do not have a UID for the user by now, we're sunk.
-        uid = self.user.authenticator.get_uid()
-        if not uid:
+        # If we do not have a UID for the user by now, we're sunk.  It
+        #  should have been set during authentication.
+        if not pod_env.get('EXTERNAL_UID'):
             raise ValueError("Cannot determine user uid!")
-        pod_env['EXTERNAL_UID'] = str(uid)
-        pod_env['EXTERNAL_GROUPS'] = self.lsst_mgr.auth_mgr.get_group_string()
 
         # Now we do the custom LSST stuff
 
         # Get image name
+        self.lab_service_account = None
         if cfg.allow_dask_spawn:
             self.lab_service_account = "dask"
         pod_name = self.pod_name
@@ -211,7 +201,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                                       indent=4))
             if self.user_options.get('kernel_image'):
                 image = self.user_options.get('kernel_image')
-                om = self.optionsform_mgr
+                om = self.lsst_mgr.optionsform_mgr
                 size = self.user_options.get('size')
                 if size:
                     image_size = om._sizemap[size]
@@ -249,8 +239,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         cpu_limit = float(cpu_limit)
         self.mem_limit = mem_limit
         self.cpu_limit = cpu_limit
-        mem_guar = em.get_env_key('LAB_MEM_GUARANTEE')
-        cpu_guar = em.get_env_key('LAB_CPU_GUARANTEE')
+        mem_guar = em.get_env_key('MEM_GUARANTEE')
+        cpu_guar = em.get_env_key('CPU_GUARANTEE')
         cpu_guar = float(cpu_guar)
         # Tiny gets the "basically nothing" above (or the explicit
         #  guarantee).  All others get 1/LAB_SIZE_RANGE times their
@@ -288,10 +278,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             image_pull_policy=self.image_pull_policy,
             image_pull_secret=self.image_pull_secrets,
             node_selector=self.node_selector,
-            run_as_uid=uid,
-            run_as_gid=gid,
-            fs_gid=fs_gid,
-            supplemental_gids=supplemental_gids,
+            run_as_uid=self.uid,
+            run_as_gid=self.gid,
+            fs_gid=self.fs_gid,
+            supplemental_gids=self.supplemental_gids,
             run_privileged=self.privileged,
             env=pod_env,
             volumes=self._expand_all(self.volumes),
