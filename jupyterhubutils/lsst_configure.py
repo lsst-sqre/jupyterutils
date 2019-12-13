@@ -21,7 +21,7 @@ def lsst_configure(config):
     if authtype == 'jwt':
         authclass.signing_certificate = '/opt/jwt/signing-certificate.pem'
         authclass.username_claim_field = 'uid'
-        authclass.expected_audience = config.audience()
+        authclass.expected_audience = config.audience
     else:
         client_id = config.oauth_client_id
         secret = config.oauth_client_secret

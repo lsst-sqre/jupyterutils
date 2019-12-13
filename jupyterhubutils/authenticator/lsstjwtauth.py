@@ -15,6 +15,8 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
     header_name = "X-Portal-Authorization"
     header_is_authorization = True
     groups = []
+    allowed_groups = []
+    forbidden_groups = []
 
     def __init__(self, *args, **kwargs):
         '''Add LSST Manager structure to hold LSST-specific logic.
@@ -53,8 +55,17 @@ class LSSTJWTAuthenticator(JSONWebTokenAuthenticator):
         if email:
             update_env['GITHUB_EMAIL'] = email
         membership = claims.get("isMemberOf")
-        grplist = self.map_groups(membership, update_env)
-        update_env['EXTERNAL_GROUPS'] = grplist
+        self.log.debug("Membership: {}".format(membership))
+        am = self.lsst_mgr.auth_mgr
+        group_map = {}
+        for grp in membership:
+            name = grp['name']
+            gid = grp.get('id')
+            if not id and not self.lsst_mgr.config.strict_ldap_groups:
+                gid = am.get_fake_gid()
+            if gid:
+                group_map[name] = gid
+        update_env['EXTERNAL_GROUPS'] = am.get_group_string()
         self.lsst_mgr.env_mgr.update_env(update_env)
         yield self.lsst_mgr.pre_spawn_start(user, spawner)
 

@@ -15,9 +15,6 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         # This is taken from https://github.com/mogthesprog/jwtauthenticator
         #  but with our additional claim information checked and stuffed
         #  into auth_state, and allow/deny lists checked.
-        # We only work with an LSSTJWTAuthenticator, which has an lsst_mgr
-        lm = self.authenticator.lsst_mgr
-        am = lm.auth_mgr
         claims, token = self._check_auth_header()
         username_claim_field = self.authenticator.username_claim_field
         username = self.retrieve_username(claims, username_claim_field)
@@ -29,7 +26,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         auth_state = yield self.refresh_user(user)
         _ = yield user.save_auth_state(auth_state)
         # Push the refreshed user through the managers
-        if not am._check_groups_jwt(claims):
+        if not self._check_groups_jwt(claims):
             # We're either in a forbidden group, or not in any allowed group
             self.log.error("User did not validate from claims groups.")
             raise web.HTTPError(403)
@@ -123,25 +120,14 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             # We're either in a forbidden group, or not in any allowed group
             self.log.error("User did not validate from claims groups.")
             return False
-        self.log.debug("Claims for user: {}".format(claims))
-        self.log.debug("Membership: {}".format(claims["isMemberOf"]))
-        gnames = [x["name"] for x in claims["isMemberOf"]]
-        self.log.debug("Setting authenticator groups: {}.".format(gnames))
-        self.authenticator.groups = gnames
-        self.groups = gnames
         return True
 
     def _jwt_validate_user_from_claims_groups(self, claims):
         cfg = self.authenticator.lsst_mgr.config
-        alist = cfg.cilogon_group_whitelist
-        dlist = cfg.cilogon_group_whitelist
         membership = [x["name"] for x in claims["isMemberOf"]]
-        intersection = list(set(dlist) & set(membership))
-        if intersection:
-            # User is in at least one forbidden group.
-            return False
-        intersection = list(set(alist) & set(membership))
-        if not intersection:
-            # User is not in at least one allowed group.
-            return False
-        return True
+        self.authenticator.allowed_groups = cfg.cilogon_allowlist
+        self.authenticator.forbidden_groups = cfg.cilogon_denylist
+        self.authenticator.groups = membership
+        self.log.debug("User in groups {}".format(membership))
+        am = self.authenticator.lsst_mgr.auth_mgr
+        return am.check_membership()
