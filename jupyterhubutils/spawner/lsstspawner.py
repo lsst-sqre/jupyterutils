@@ -148,6 +148,14 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # from our environment manager:
         pod_env = self.get_env()
         em = self.lsst_mgr.env_mgr
+        em.refresh_pod_env()
+        em_env = em.get_env()
+        # The env_mgr's API tokens are stale; replace with current.
+        for envvar in ["JUPYTERHUB_API_TOKEN", "JPY_API_TOKEN"]:
+            if envvar in em_env:
+                em.set_env(envvar, None)
+            if envvar in pod_env:
+                em.set_env(envvar, pod_env[envvar])
         cfg = self.lsst_mgr.config
         em.refresh_pod_env()
         pod_env.update(em.get_env())

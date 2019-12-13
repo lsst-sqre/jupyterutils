@@ -13,6 +13,8 @@ class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
     enable_auth_state = True
     login_handler = oauthenticator.CILogonLoginHandler
     groups = []
+    allowed_groups = []
+    forbidden_groups = []
     _default_domain = None
 
     def __init__(self, *args, **kwargs):
@@ -24,6 +26,8 @@ class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
     @gen.coroutine
     def authenticate(self, handler, data=None):
         self.log.info("Authenticating user against CILogon.")
+        self.allowed_groups = self.lsst_mgr.config.cilogon_allowlist
+        self.forbidden_groups = self.lsst_mgr.config.cilogon_denylist
         userdict = yield super().authenticate(handler, data)
         if userdict:
             ast = yield self.user.get_auth_state()
@@ -54,31 +58,14 @@ class LSSTCILogonOAuthenticator(oauthenticator.CILogonOAuthenticator):
         groupmap = {}
         for rec in membership:
             name = rec["name"]
-            gnames.append(name)
             gid = rec.get("id")
             if not gid and not self.lsst_mgr.config.strict_ldap_groups:
                 gid = self.lsst_mgr.auth_mgr.get_fake_gid()
             if gid:
                 groupmap[name] = gid
+                gnames.append(name)
         self.groups = gnames
         self.lsst_mgr.auth_mgr.group_map = groupmap
-
-    def _check_cilogon_group_membership(self, userdict):
-        if ("auth_state" not in userdict or not userdict["auth_state"]):
-            self.log.warn("User doesn't have auth_state")
-            return False
-        ast = userdict["auth_state"]
-        cu = ast["cilogon_user"]
-        if "isMemberOf" in cu:
-            has_member = yield self._check_member_of(cu["isMemberOf"])
-            if not has_member:
-                return False
-        if ("token_response" not in ast or not ast["token_response"] or
-            "id_token" not in ast["token_response"] or not
-                ast["token_response"]["id_token"]):
-            self.log.warn("User doesn't have ID token!")
-            return False
-        return True
 
     @gen.coroutine
     def pre_spawn_start(self, user, spawner):
