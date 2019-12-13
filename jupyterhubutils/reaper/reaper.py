@@ -5,8 +5,13 @@ from jupyterhubutils.scanrepo import SingletonScanner
 
 
 class Reaper(SingletonScanner):
+<<<<<<< HEAD
     '''Class to allow implementation of image retention policy.
     '''
+=======
+    """Class to allow implementation of image retention policy.
+    """
+>>>>>>> master
 
     _categorized_tags = {"weekly": [],
                          "daily": [],
@@ -57,14 +62,20 @@ class Reaper(SingletonScanner):
         self.reapable = reapable
 
     def report_reapable(self):
+<<<<<<< HEAD
         '''Return a space-separated list of reapable images.
         '''
+=======
+>>>>>>> master
         self._select_victims()
         return " ".join(self.reapable.keys())
 
     def reap(self):
+<<<<<<< HEAD
         '''Select and delete images.
         '''
+=======
+>>>>>>> master
         self._select_victims()
         self._delete_from_repo()
 
