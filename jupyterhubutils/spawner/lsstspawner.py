@@ -115,9 +115,9 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
 
     @gen.coroutine
     def stop(self, now=False):
-        self.log.debug("Stopping; about to call original stop() method.")
+        '''After stopping pod, delete the namespace if that option is set.
+        '''
         _ = yield super().stop(now)
-        self.log.debug("Returned from original stop().")
         if self.delete_namespace_on_stop:
             nsm = self.lsst_mgr.namespace_mgr
             self.log.debug("Attempting to delete namespace.")
@@ -126,21 +126,9 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             self.log.debug("'delete_namespace_on_stop' not set.")
 
     def options_from_form(self, formdata=None):
-        options = None
-        if formdata:
-            self.log.debug("Form data: %s", json.dumps(formdata,
-                                                       sort_keys=True,
-                                                       indent=4))
-            options = {}
-            if ('kernel_image' in formdata and formdata['kernel_image']):
-                options['kernel_image'] = formdata['kernel_image'][0]
-            if ('size' in formdata and formdata['size']):
-                options['size'] = formdata['size'][0]
-            if ('image_tag' in formdata and formdata['image_tag']):
-                options['image_tag'] = formdata['image_tag'][0]
-            if ('clear_dotlocal' in formdata and formdata['clear_dotlocal']):
-                options['clear_dotlocal'] = True
-        return options
+        '''Delegate to form manager.
+        '''
+        return self.lsst_mgr.optionsform_mgr.options_from_form(formdata)
 
     @gen.coroutine
     def get_pod_manifest(self):

@@ -55,6 +55,9 @@ def make_logger(name=__name__):
 
 def str_bool(s):
     '''Make a sane guess for whether a value represents true or false.
+    Intended for strings, mostly in the context of environment variables,
+    but if you pass it something that's not a string that is falsy, like
+    an empty list, it will cheerfully return False.
     '''
     if not s:
         return False

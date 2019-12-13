@@ -1,4 +1,4 @@
-'''LSST-specific Github OAuthenticator class, delegating its LSST-specific
+'''LSST-specific CILogon OAuthenticator class, delegating its LSST-specific
 authentication logic to its auth_mgr.
 '''
 import json
