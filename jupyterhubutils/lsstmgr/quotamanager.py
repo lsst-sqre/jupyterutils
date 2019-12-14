@@ -1,5 +1,3 @@
-'''Quota support for LSST LSP Jupyterlab and Dask pods.
-'''
 import json
 import os
 from kubernetes.client import V1ResourceQuotaSpec
@@ -10,8 +8,10 @@ from ..utils import make_logger
 
 
 class LSSTQuotaManager(object):
+    '''Quota support for LSST LSP Jupyterlab and Dask pods.
+    '''
     quota = {}
-    _custom_resources = {}
+    custom_resources = {}
     resourcemap = None
 
     def __init__(self, *args, **kwargs):
@@ -19,27 +19,59 @@ class LSSTQuotaManager(object):
         self.log.debug("Creating LSSTQuotaManager")
         self.parent = kwargs.pop('parent')
 
-    def read_resource_map(self, resource_file=None):
-        rfile = "/opt/lsst/software/jupyterhub/resources/resourcemap.json"
-        if not resource_file:
-            resource_file = rfile
-        if not os.path.exists(resource_file):
-            nf_msg = ("Could not find resource definition file" +
-                      " at '{}'".format(resource_file))
-            self.log.error(nf_msg)
-            return None
-        with open(resource_file, "r") as rf:
-            resmap = json.load(rf)
-        return resmap
+    def define_resource_quota_spec(self):
+        '''We're going to return a resource quota spec that checks whether we
+        have a custom resource map and uses that information.  If we do not
+        then we use the quota from our parent's config object.
 
-    def set_custom_user_resources(self):
+        Note that you could get a lot fancier, and check the user group
+        memberships to determine what class a user belonged to, or some other
+        more-sophisticated-than-one-size-fits-all quota mechanism.
+        '''
+        self.log.debug("Calculating default resource quotas.")
+        om = self.parent.optionsform_mgr
+        sizemap = om.sizemap
+        # sizemap is an ordered dict, and we want the last-inserted one,
+        #  which is the biggest
+        big = list(sizemap.keys())[-1]
+        cpu = sizemap[big]['cpu']
+        cfg = self.parent.config
+        max_dask_workers = 0
+        if cfg.allow_dask_spawn:
+            max_dask_workers = cfg.max_dask_workers
+        mem_per_cpu = cfg.mb_per_cpu
+        total_cpu = (1 + max_dask_workers) * cpu
+        total_mem = str(int(total_cpu * mem_per_cpu + 0.5)) + "Mi"
+        total_cpu = str(int(total_cpu + 0.5))
+        self.log.debug("Default quota sizes: CPU %r, mem %r" % (
+            total_cpu, total_mem))
+        self._set_custom_user_resources()
+        if self.custom_resources:
+            self.log.debug("Have custom resources.")
+            cpuq = self.custom_resources.get("cpu_quota")
+            if cpuq:
+                self.log.debug("Overriding CPU quota.")
+                total_cpu = str(cpuq)
+            memq = self.custom_resources.get("mem_quota")
+            if memq:
+                self.log.debug("Overriding memory quota.")
+                total_mem = str(memq) + "Mi"
+        self.log.debug("Determined quota sizes: CPU %r, mem %r" % (
+            total_cpu, total_mem))
+        qs = V1ResourceQuotaSpec(
+            hard={"limits.cpu": total_cpu,
+                  "limits.memory": total_mem})
+        self.quota = qs.hard
+
+    def _set_custom_user_resources(self):
         '''Create custom resource definitions for user.
         '''
         if not self.resourcemap:
-            self.log.info("No resource map found; generating.")
-            self.resourcemap = self.read_resource_map()
-            if not self.resourcemap:
-                return
+            self.log.debug("No resource map found; generating.")
+            self._create_resource_map()
+        if not self.resourcemap:
+            self.log.warning("No resource map; cannot generate quota.")
+            return
         resources = {
             "size_index": 0,
             "cpu_quota": 0,
@@ -69,54 +101,27 @@ class LSSTQuotaManager(object):
                     vv = candidate.get(fld)
                     if vv and vv > resources[fld]:
                         resources[fld] = vv
-                    self.log.info(
-                        "Setting custom resources '{}'".format(resources))
-                    self._custom_resources = resources
+                    self.log.debug(
+                        "Setting custom resources '{}'".format(resources) +
+                        "for user '{}'".format(uname))
+                    self.custom_resources = resources
 
-    def get_resource_quota_spec(self):
-        '''We're going to return a resource quota spec that checks whether we
-        have a custom resource map and uses that information.  If we do not
-        then we use the quota from our parent's config object.
-
-        Note that you could get a lot fancier, and check the user group
-        memberships to determine what class a user belonged to, or some other
-        more-sophisticated-than-one-size-fits-all quota mechanism.
-        '''
-        self.log.debug("Entering get_resource_quota_spec()")
-        self.log.info("Calculating default resource quotas.")
-        big_multiplier = 2 ** (len(self.parent.optionsform_mgr._sizelist) - 1)
-        cfg = self.parent.config
-        max_dask_workers = cfg.max_dask_workers
-        tiny_cpu = cfg.tiny_cpu
-        mem_per_cpu = cfg.mb_per_cpu
-        total_cpu = (1 + max_dask_workers) * big_multiplier * tiny_cpu
-        total_mem = str(int(total_cpu * mem_per_cpu + 0.5)) + "Mi"
-        total_cpu = str(int(total_cpu + 0.5))
-        self.log.debug("Default quota sizes: CPU %r, mem %r" % (
-            total_cpu, total_mem))
-        if self._custom_resources:
-            self.log.debug("Have custom resources.")
-            cpuq = self._custom_resources.get("cpu_quota")
-            if cpuq:
-                self.log.debug("Overriding CPU quota.")
-                total_cpu = str(cpuq)
-            memq = self._custom_resources.get("mem_quota")
-            if memq:
-                self.log.debug("Overriding memory quota.")
-                total_mem = str(memq) + "Mi"
-        self.log.info("Determined quota sizes: CPU %r, mem %r" % (
-            total_cpu, total_mem))
-        qs = V1ResourceQuotaSpec(
-            hard={"limits.cpu": total_cpu,
-                  "limits.memory": total_mem})
-        self.quota = qs.hard
-        return qs
+    def _create_resource_map(self):
+        resource_file = self.parent.config.resource_map
+        if not os.path.exists(resource_file):
+            nf_msg = ("Could not find resource definition file" +
+                      " at '{}'".format(resource_file))
+            self.log.error(nf_msg)
+            return
+        with open(resource_file, "r") as rf:
+            resmap = json.load(rf)
+        self.resourcemap = resmap
 
     # Brought in from namespacedkubespawner
     def ensure_namespaced_resource_quota(self, quotaspec):
         '''Create K8s quota object if necessary.
         '''
-        self.log.info("Entering ensure_namespaced_resource_quota()")
+        self.log.debug("Entering ensure_namespaced_resource_quota()")
         namespace = self.parent.namespace_mgr.namespace
         api = self.parent.api
         if namespace == "default":
@@ -138,12 +143,14 @@ class LSSTQuotaManager(object):
                                    "failed: %s", str(e))
                 raise
             else:
-                self.log.info("Resourcequota '%r' " % quota +
-                              "already exists in '%s'." % namespace)
+                self.log.debug("Resourcequota '%r' " % quota +
+                               "already exists in '%s'." % namespace)
 
-    def _destroy_namespaced_resource_quota(self):
-        # You don't usually have to call this, since it will get
-        #  cleaned up as part of namespace deletion.
+    def destroy_namespaced_resource_quota(self):
+        '''Destroys the Kubernetes namespaced resource quota.
+        You don't usually have to call this, since it will get
+        cleaned up as part of namespace deletion.
+        '''
         namespace = self.parent.namespace_mgr.namespace
         api = self.parent.api
         qname = "quota-" + namespace
@@ -151,3 +158,12 @@ class LSSTQuotaManager(object):
         self.log.info("Deleting resourcequota '%s'" % qname)
         api.delete_namespaced_resource_quota(
             qname, namespace, dopts)
+
+    def dump(self):
+        '''Return contents dict for pretty-printing/aggregation.
+        '''
+        qd = {"parent": str(self.parent),
+              "quota": self.quota,
+              "custom_resources": self.custom_resources,
+              "resourcemap": self.resourcemap}
+        return qd

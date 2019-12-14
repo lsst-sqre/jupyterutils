@@ -293,7 +293,7 @@ class ScanRepo(object):
         return self.data
 
     def get_all_tags(self):
-        '''Return all tags in the repository.
+        '''Return all tags in the repository (sorted by last_updated).
         '''
         return self._all_tags
 
@@ -513,9 +513,16 @@ class ScanRepo(object):
             ict = imap[ikey]["count"]
             if ict:
                 r[ikey] = displayorder[idx][:ict]
-        all_tags = sorted(list(self._results_map.keys()))
+        all_tags = self._sort_tags_by_date()
         self._all_tags = all_tags
         self.data = r
+
+    def _sort_tags_by_date(self):
+        items = [x[1] for x in self._results_map.items()]
+        dec = [(x['last_updated'], x['name']) for x in items]
+        dec.sort(reverse=True)
+        tags = [x[1] for x in dec]
+        return tags
 
     def _sort_images_by_name(self, clist):
         # We have a flag day where we start putting underscores into

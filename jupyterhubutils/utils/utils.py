@@ -42,8 +42,8 @@ def make_logger(name=__name__):
     '''Create a logger with a specific output format.
     '''
     logger = logging.getLogger(name)
-    fstr = '%(levelname)s | %(asctime)s | %(module)s:%(funcName)s:%(lineno)d'
-    fstr += ' | %(message)s'
+    fstr = '[%(levelname).1s %(asctime)s %(module)s:%(funcName)s:%(lineno)d] '
+    fstr += '%(message)s'
     ch = logging.StreamHandler()
     fmt = logging.Formatter(fstr)
     ch.setFormatter(fmt)
@@ -78,6 +78,22 @@ def str_true(v):
         return 'TRUE'
     else:
         return ''
+
+
+def listify(item, delimiter=','):
+    '''Used for taking character (usually comma)-separated string lists
+    and returning an actual list, or the empty list.
+    Useful for environment parsing.
+
+    Sure, you could pass it integer zero and get [] back.  Don't.
+    '''
+    if not item:
+        return []
+    if type(item) is str:
+        item = item.split(delimiter)
+    if type(item) is not list:
+        raise TypeError("'listify' must take None, str, or list!")
+    return item
 
 
 def list_duplicates(seq):

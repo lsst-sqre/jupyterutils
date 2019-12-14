@@ -4,6 +4,7 @@ import datetime
 from tornado import gen, web
 from jupyterhub.utils import url_path_join
 from jwtauthenticator.jwtauthenticator import JSONWebTokenLoginHandler
+from ..lsstmgr import check_membership
 
 
 class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
@@ -15,7 +16,10 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         # This is taken from https://github.com/mogthesprog/jwtauthenticator
         #  but with our additional claim information checked and stuffed
         #  into auth_state, and allow/deny lists checked.
-        claims, token = self._check_auth_header()
+        #
+        # We can't just use the superclass because it issues the redirect,
+        #  and we can't do that until we do our additional checking.
+        claims, token = yield self._check_auth_header()
         username_claim_field = self.authenticator.username_claim_field
         username = self.retrieve_username(claims, username_claim_field)
         user = self.user_from_username(username)
@@ -24,12 +28,11 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         #  choose our field names to make the spawner reusable from the
         #  OAuthenticator implementation.
         auth_state = yield self.refresh_user(user)
-        _ = yield user.save_auth_state(auth_state)
-        # Push the refreshed user through the managers
-        if not self._check_groups_jwt(claims):
+        if not self._jwt_validate_user(auth_state):
             # We're either in a forbidden group, or not in any allowed group
             self.log.error("User did not validate from claims groups.")
             raise web.HTTPError(403)
+        _ = yield user.save_auth_state(auth_state)
         self.set_login_cookie(user)
         _url = url_path_join(self.hub.server.base_url, 'home')
         next_url = self.get_argument('next', default=False)
@@ -44,7 +47,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         '''
         self.log.debug("Refreshing user data.")
         try:
-            claims, token = self._check_auth_header()
+            claims, token = yield self._check_auth_header()
         except web.HTTPError:
             # Force re-login
             return False
@@ -55,18 +58,20 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
                       "claims": claims}
         return auth_state
 
+    @gen.coroutine
     def _check_auth_header(self):
         # Either returns (valid) claims and token,
         #  or throws a web error of some type.
         self.log.debug("Checking authentication header.")
+        cfg = self.authenticator.lsst_mgr.config
         header_name = self.authenticator.header_name
         param_name = self.authenticator.param_name
         header_is_authorization = self.authenticator.header_is_authorization
         auth_header_content = self.request.headers.get(header_name, "")
         auth_cookie_content = self.get_cookie("XSRF-TOKEN", "")
-        signing_certificate = self.authenticator.signing_certificate
+        signing_certificate = cfg.jwt_signing_certificate
         secret = self.authenticator.secret
-        audience = self.authenticator.expected_audience
+        audience = cfg.audience
         tokenParam = self.get_argument(param_name, default=False)
         if auth_header_content and tokenParam:
             self.log.error("Authentication: both an authentication header " +
@@ -75,7 +80,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         elif auth_header_content:
             if header_is_authorization:
                 # We should not see "token" as first word in the
-                #  AUTHORIZATION header.  If we do it could mean someone
+                #  authorization header.  If we do it could mean someone
                 #  coming in with a stale API token
                 if auth_header_content.split()[0].lower() != "bearer":
                     self.log.error("Authorization header is not 'bearer'.")
@@ -90,7 +95,6 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         else:
             self.log.error("Could not determine authentication token.")
             raise web.HTTPError(401)
-
         claims = ""
         if secret:
             claims = self.verify_jwt_using_secret(token, secret, audience)
@@ -100,7 +104,6 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         else:
             self.log.error("Could not verify JWT.")
             raise web.HTTPError(401)
-
         # Check expiration
         expiry = int(claims['exp'])
         now = int(datetime.datetime.utcnow().timestamp())
@@ -109,25 +112,16 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             raise web.HTTPError(401)
         return claims, token
 
-    def _check_groups_jwt(self, claims):
-        # Here is where we deviate from the vanilla JWT authenticator.
-        # We simply store all the JWT claims in auth_state, although we also
-        #  choose our field names to make the spawner reusable from the
-        #  OAuthenticator implementation.
-        # We will already have pulled the claims and token from the
-        #  auth header.
-        if not self._jwt_validate_user_from_claims_groups(claims):
-            # We're either in a forbidden group, or not in any allowed group
-            self.log.error("User did not validate from claims groups.")
-            return False
-        return True
-
-    def _jwt_validate_user_from_claims_groups(self, claims):
+    def _jwt_validate_user(self, auth_state):
         cfg = self.authenticator.lsst_mgr.config
-        membership = [x["name"] for x in claims["isMemberOf"]]
-        self.authenticator.allowed_groups = cfg.cilogon_allowlist
-        self.authenticator.forbidden_groups = cfg.cilogon_denylist
-        self.authenticator.groups = membership
-        self.log.debug("User in groups {}".format(membership))
-        am = self.authenticator.lsst_mgr.auth_mgr
-        return am.check_membership()
+        claims = auth_state['claims']
+        uid, groupmap = self.authenticator.resolve_cilogon(claims)
+        groups = list(groupmap.keys())
+        valid = check_membership(
+            groups, cfg.allowed_groups, cfg.forbidden_groups, log=self.log)
+        if not valid:
+            self.log.warning("Group membership check failed.")
+            return False
+        auth_state['group_map'] = groupmap
+        auth_state['uid'] = uid
+        return True

@@ -16,20 +16,21 @@ from .reaper import Reaper
 from .scanrepo import ScanRepo
 from .scanrepo import SingletonScanner
 from .singleton import Singleton
-from .lsstmgr import LSSTMiddleManager
+from .lsstmgr import LSSTMiddleManager, check_membership
 from .spawner import LSSTSpawner
 from .authenticator.lsstcilogonauth import LSSTCILogonOAuthenticator
 from .authenticator.lsstgithubauth import LSSTGitHubOAuthenticator
 from .authenticator.lsstjwtauth import LSSTJWTAuthenticator
 from .utils import (rreplace, sanitize_dict, get_execution_namespace,
-                    make_logger, str_bool, str_true, list_duplicates)
+                    make_logger, str_bool, str_true, listify, list_duplicates)
 from .config import LSSTConfig
-from .lsst_configure import lsst_configure
+from .setup_auth import configure_auth_and_spawner
 from ._version import __version__
 
-__all__ = [LSSTMiddleManager, Prepuller, Reaper, ScanRepo, Singleton,
-           SingletonScanner, LSSTSpawner, LSSTCILogonOAuthenticator,
-           LSSTGitHubOAuthenticator, LSSTJWTAuthenticator, rreplace,
-           sanitize_dict, get_execution_namespace, make_logger, str_bool,
-           str_true, list_duplicates, LSSTConfig, lsst_configure,
-           __version__]
+__all__ = [LSSTMiddleManager, check_membership, Prepuller, Reaper,
+           ScanRepo, Singleton, SingletonScanner, LSSTSpawner,
+           LSSTCILogonOAuthenticator, LSSTGitHubOAuthenticator,
+           LSSTJWTAuthenticator, rreplace, sanitize_dict,
+           get_execution_namespace, make_logger, str_bool, str_true,
+           listify, list_duplicates, LSSTConfig,
+           configure_auth_and_spawner, __version__]

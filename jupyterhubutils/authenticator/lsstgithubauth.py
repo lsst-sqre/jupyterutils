@@ -6,9 +6,9 @@ import oauthenticator
 from oauthenticator.common import next_page_from_links
 from tornado import gen
 from tornado.httpclient import HTTPRequest, AsyncHTTPClient, HTTPError
-from .. import LSSTMiddleManager
-from ..config import LSSTConfig
-from ..utils import make_logger, sanitize_dict
+from .lsstauth import LSSTAuthenticator
+from ..lsstmgr import check_membership
+from ..utils import make_logger
 
 
 def github_api_headers(access_token):
@@ -20,76 +20,40 @@ def github_api_headers(access_token):
             }
 
 
-class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
-    enable_auth_state = True
+class LSSTGitHubOAuthenticator(LSSTAuthenticator,
+                               oauthenticator.GitHubOAuthenticator):
     login_handler = oauthenticator.GitHubLoginHandler
-    user_groups = []
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
         self.log.debug("Creating LSSTGitHubOAuthenticator.")
         super().__init__(*args, **kwargs)
-        self.log.debug("Superclass authenticator created.")
-        self.lsst_mgr = LSSTMiddleManager(parent=self, config=LSSTConfig())
 
     @gen.coroutine
     def authenticate(self, handler, data=None):
+        '''Authenticate and store data on auth_mgr.
+        '''
         self.log.info("Authenticating user against GitHub.")
+        cfg = self.lsst_mgr.config
+        # This must be set for the superclass authentication
+        self.github_organization_whitelist = cfg.github_allowlist
         userdict = yield super().authenticate(handler, data)
-        try:
-            token = userdict["auth_state"]["access_token"]
-        except (KeyError, TypeError):
-            self.log.warning("Could not extract access token.")
-        if token:
-            self.log.debug("Setting authenticator groups from token.")
-            self._set_groups_from_github_token(token)
-        else:
-            self.log.debug("No token found.")
-        denylist = self.lsst_mgr.config.github_denylist
-        if denylist:
-            if not token:
-                self.log.warning("User does not have access token.")
-                userdict = None
-            else:
-                self.log.debug("Denylist `%s` found." % denylist)
-                denylist = denylist.split(',')
-                denied = yield self._check_denylist(userdict, denylist)
-            if denied:
-                self.log.warning("Rejecting user: denylisted")
-                userdict = None
-        self.lsst_mgr.uid = userdict["auth_state"]["github_user"]["id"]
-        return userdict
-
-    @gen.coroutine
-    def _set_groups_from_github_token(self, token):
-        self.log.debug("Acquiring list of user organizations.")
-        gh_org = yield self._get_github_user_organizations(token)
-        if not gh_org:
-            self.log.warning("Could not get list of user organizations.")
-        self.user_groups = list(gh_org.keys())
-        self.lsst_mgr.auth_mgr.group_map = gh_org
-        self.log.debug("Set user organizations to '{}'.".format(gh_org))
-
-    @gen.coroutine
-    def _check_github_denylist(self, userdict, denylist):
-        if ("auth_state" not in userdict or not userdict["auth_state"]):
-            self.log.warning("User doesn't have auth_state: rejecting.")
-            return True
+        if userdict is None:
+            return None
         ast = userdict["auth_state"]
-        if ("access_token" not in ast or not ast["access_token"]):
-            self.log.warning("User doesn't have access token: rejecting.")
-            return True
-        tok = ast["access_token"]
-        gh_org = yield self._get_github_user_organizations(tok)
-        if not gh_org:
-            self.log.warning("Could not get list of GH user orgs: rejecting.")
-            return True
-        deny = list(set(gh_org) & set(denylist))
-        if deny:
-            self.log.warning("User in denylist %s: rejecting." % str(deny))
-            return True
-        self.log.debug("User not in denylist %s" % str(denylist))
-        return False
+        token = ast["access_token"]
+        self.log.debug("Setting authenticator groups from token.")
+        groupmap = yield self._get_github_user_organizations(token)
+        groups = list(groupmap.keys())
+        ok = check_membership(groups, cfg.allowed_groups, cfg.forbidden_groups,
+                              log=self.log)
+        if not ok:
+            self.log.warning("Group membership check failed.")
+            return None
+        _ = yield self._set_github_user_email(ast, token)
+        ast['group_map'] = groupmap
+        ast['uid'] = ast['github_user']['id']
+        return userdict
 
     @gen.coroutine
     def _get_github_user_organizations(self, access_token):
@@ -109,16 +73,30 @@ class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
             resp_json = json.loads(resp.body.decode('utf8', 'replace'))
             next_page = next_page_from_links(resp)
             for entry in resp_json:
-                # This could result in non-unique groups, if the first 32
-                #  characters of the group names are the same.
-                normalized_group = entry["login"][:32]
-                orgmap[normalized_group] = entry["id"]
+                group = entry["login"]
+                orgmap[group] = entry["id"]
         return orgmap
+
+    @gen.coroutine
+    def _set_github_user_email(self, auth_state, access_token):
+        gh_user = auth_state["github_user"]
+        gh_email = gh_user.get("email")
+        if gh_email:
+            # Nothing further to do.
+            return
+        if not gh_email:
+            gh_email = yield self._get_github_user_email(access_token)
+        if not gh_email:
+            # Oh well.
+            return
+        gh_user["email"] = gh_email
+        # And now it will be stored with auth_state
 
     @gen.coroutine
     def _get_github_user_email(self, access_token):
         # Determine even private email, if the token has 'user:email'
         #  scope
+        self.log.debug("Attempting alternate means of determining user email.")
         http_client = AsyncHTTPClient()
         headers = github_api_headers(access_token)
         gh_api = self.lsst_mgr.config.github_api
@@ -131,40 +109,8 @@ class LSSTGitHubOAuthenticator(oauthenticator.GitHubOAuthenticator):
             for entry in resp_json:
                 if "email" in entry:
                     if "primary" in entry and entry["primary"]:
+                        self.log.debug(
+                            "Found email: {}".format(entry['email']))
                         return entry["email"]
+        self.log.debug("Could not determine user email.")
         return None
-
-    @gen.coroutine
-    def pre_spawn_start(self, user=None, spawner=None):
-        update_env = {}
-        # Github fields
-        auth_state = yield user.get_auth_state()
-        gh_user = auth_state.get("github_user")
-        gh_token = auth_state.get("access_token")
-        gh_id = gh_user.get("id")
-        gh_org = yield self._get_github_user_organizations(gh_token)
-        self.log.debug("GitHub organizations: {}".format(gh_org))
-        gh_email = gh_user.get("email")
-        if not gh_email:
-            gh_email = yield self._get_github_user_email(gh_token)
-        gh_login = gh_user.get("login")
-        gh_name = gh_user.get("name") or gh_login
-        update_env['EXTERNAL_UID'] = str(gh_id)
-        orglstr = ','.join(["{}:{}".format(k, gh_org[k])
-                            for k in list(gh_org.keys())])
-        update_env['EXTERNAL_GROUPS'] = orglstr
-        if gh_name:
-            update_env['GITHUB_NAME'] = gh_name
-        if gh_login:
-            update_env['GITHUB_LOGIN'] = gh_login
-        if gh_token:
-            update_env['GITHUB_ACCESS_TOKEN'] = gh_token
-        if gh_email:
-            update_env['GITHUB_EMAIL'] = gh_email
-        sanitized = sanitize_dict(
-            auth_state, ['token_response', 'access_token'])
-        self.log.debug("auth_state: %s", json.dumps(sanitized,
-                                                    indent=4,
-                                                    sort_keys=True))
-        self.lsst_mgr.env_mgr.update_env(update_env)
-        yield self.lsst_mgr.pre_spawn_start(user, spawner)

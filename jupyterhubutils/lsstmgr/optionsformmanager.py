@@ -3,6 +3,7 @@
 import datetime
 import jinja2
 import json
+from collections import OrderedDict
 from time import sleep
 from .. import SingletonScanner
 from ..utils import make_logger
@@ -12,19 +13,25 @@ class LSSTOptionsFormManager(object):
     '''Class to create and read a spawner form.
     '''
 
-    _sizemap = {}
-    _sizelist = []
+    sizemap = {}
     _scanner = None
+    options_form_data = None
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
         self.log.debug("Creating LSSTOptionsFormManager")
         self.parent = kwargs.pop('parent')
 
-    def lsst_options_form(self):
+    def get_options_form(self):
         '''Create an LSST Options Form from parent's config object.
         '''
-        # Make options form by scanning container repository
+        # Make options form by scanning container repository, then cache it.
+        # For a single spawning session, you always get the same form.  That's
+        # OK.
+        self.log.debug("Creating options form.")
+        if self.options_form_data:
+            self.log.debug("Returning cached options form.")
+            return self.options_form_data
         cfg = self.parent.config
         scanner = SingletonScanner(host=cfg.lab_repo_host,
                                    owner=cfg.lab_repo_owner,
@@ -39,34 +46,38 @@ class LSSTOptionsFormManager(object):
         self._sync_scan()
         lnames, ldescs = scanner.extract_image_info()
         desclist = []
-        # If there's only one image, we don't need a form.
-        if not lnames or len(lnames) < 2:
-            return ""
         # Setting this up to pass into the Jinja template more easily
         for idx, img in enumerate(lnames):
             desclist.append({"name": img,
                              "desc": ldescs[idx]})
         colon = lnames[0].find(':')
         custtag = lnames[0][:colon] + ":__custom"
-        resmap = scanner.get_all_scan_results()
-        all_tags = list(resmap.keys())
+        all_tags = scanner.get_all_tags()
         now = datetime.datetime.now()
         nowstr = now.ctime()
         if not now.tzinfo:
             # If we don't have tzinfo, assume it's in UTC
             nowstr += " UTC"
-        self._make_sizemap_and_list()
+        self._make_sizemap()
+        # in order to get the right default size index, we need to poke the
+        #  quota manager, because different users may get different sizes
+        #  by default
+        cfg = self.parent.config
+        qm = self.parent.quota_mgr
+        qm.define_resource_quota_spec()
+        defaultsize = qm.custom_resources.get('size_index') or cfg.size_index
         template_file = self.parent.config.form_template
         template_loader = jinja2.FileSystemLoader(searchpath='/')
         template_environment = jinja2.Environment(loader=template_loader)
         template = template_environment.get_template(template_file)
         optform = template.render(
-            defaultsize=cfg.size_index,
+            defaultsize=defaultsize,
             desclist=desclist,
             all_tags=all_tags,
             custtag=custtag,
-            sizelist=self._sizelist,
+            sizelist=list(self.sizemap.values()),
             nowstr=nowstr)
+        self.options_form_data = optform
         return optform
 
     def resolve_tag(self, tag):
@@ -76,55 +87,47 @@ class LSSTOptionsFormManager(object):
 
     def _sync_scan(self):
         scanner = self._scanner
-        delay_interval = 5
-        max_delay = 300
+        cfg = self.parent.config
+        delay_interval = cfg.initial_scan_interval
+        max_delay_interval = cfg.max_scan_interval
+        max_delay = cfg.max_scan_delay
         delay = 0
-        while scanner.last_updated == datetime.datetime(1970, 1, 1):
-            self.log.info("Scan results not available yet; sleeping " +
-                          "{}s ({}s so far).".format(delay_interval,
-                                                     delay))
+        epoch = datetime.datetime(1970, 1, 1)
+        while scanner.last_updated == epoch:
+            self.log.info(("Scan results not available yet; sleeping " +
+                           "{:02.1f}s ({:02.1f}s " +
+                           "so far).").format(delay_interval, delay))
             sleep(delay_interval)
             delay = delay + delay_interval
+            delay_interval *= 2
+            if delay_interval > max_delay_interval:
+                delay_interval = max_delay_interval
             if delay >= max_delay:
                 errstr = ("Scan results did not become available in " +
                           "{}s.".format(max_delay))
                 raise RuntimeError(errstr)
 
-    def _make_sizemap_and_list(self):
+    def _make_sizemap(self):
+        sizemap = OrderedDict()
+        # For supported Python versions, dict is ordered anyway...
         sizes = self.parent.config.form_sizelist
         tiny_cpu = self.parent.config.tiny_cpu
         mem_per_cpu = self.parent.config.mb_per_cpu
+        # Each size doubles the previous one.
         cpu = tiny_cpu
+        idx = 0
         for sz in sizes:
             mem = mem_per_cpu * cpu
-            self._sizemap[sz] = {"cpu": cpu,
-                                 "mem": mem}
+            sizemap[sz] = {"cpu": cpu,
+                           "mem": mem,
+                           "name": sz,
+                           "index": idx}
             desc = sz.title() + " (%.2f CPU, %dM RAM)" % (cpu, mem)
-            self._sizemap[sz]["desc"] = desc
+            sizemap[sz]["desc"] = desc
             cpu = cpu * 2
+            idx = idx + 1
         # Clean up if list of sizes changed.
-        sls = list(self._sizemap.keys())
-        for esz in sls:
-            if esz not in sizes:
-                del self._sizemap[esz]
-        self._sizelist = []
-        for name in self._sizemap:
-            self._sizelist.append({"name": name,
-                                   "desc": self._sizemap[name]["desc"]})
-
-    def _get_size_index(self):
-        sizes = list(self._sizemap.keys())
-        cfg = self.parent.config
-        cr = None
-        if self.parent.quota_mgr:
-            cr = self.parent.quota_mgr._custom_resources
-        if cr is None:
-            cr = {}
-        si = cr.get("size_index") or cfg.size_index
-        size_index = int(si)
-        if size_index >= len(sizes):
-            size_index = len(sizes) - 1
-        return size_index
+        self.sizemap = sizemap
 
     def options_from_form(self, formdata=None):
         '''Get user selections.
@@ -144,3 +147,11 @@ class LSSTOptionsFormManager(object):
             if ('clear_dotlocal' in formdata and formdata['clear_dotlocal']):
                 options['clear_dotlocal'] = True
         return options
+
+    def dump(self):
+        '''Return contents dict for pretty-printing.
+        '''
+        sd = {"parent": str(self.parent),
+              "sizemap": self.sizemap,
+              "scanner": str(self._scanner)}
+        return sd

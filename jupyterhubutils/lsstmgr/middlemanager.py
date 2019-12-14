@@ -1,14 +1,4 @@
-'''The LSSTMiddleManager is a class that holds references to various
-LSST-specific management objects and delegates requests to them.  The
-idea is that an LSST Spawner, or an LSST Workflow Manager, could
-instantiate a single LSSTMiddleManager, which would then be empowered
-to perform all LSST-specific operations, reducing configuration
-complexity.
-'''
-
-from tornado import gen
 from ..utils import make_logger
-
 from .authmanager import LSSTAuthManager
 from .envmanager import LSSTEnvironmentManager
 from .namespacemanager import LSSTNamespaceManager
@@ -18,14 +8,20 @@ from .volumemanager import LSSTVolumeManager
 
 
 class LSSTMiddleManager(object):
+    '''The LSSTMiddleManager is a class that holds references to various
+    LSST-specific management objects and delegates requests to them.
+    The idea is that an LSST Spawner, or an LSST Workflow Manager,
+    could instantiate a single LSSTMiddleManager, which would then be
+    empowered to perform all LSST-specific operations, reducing
+    configuration complexity.
+    '''
     parent = None
+    config = None
     authenticator = None
     spawner = None
     user = None
-    username = None
-    uid = None
     api = None
-    rbacapi = None
+    rbac_api = None
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
@@ -43,25 +39,24 @@ class LSSTMiddleManager(object):
         self.volume_mgr = LSSTVolumeManager(parent=self)
 
     def ensure_resources(self):
-        '''Delegate to namespace manager (it in turn delegates to volume
-        manager for PV manipulation).
+        '''Delegate to namespace manager.
         '''
         self.namespace_mgr.ensure_namespace()
 
-    @gen.coroutine
-    def pre_spawn_start(self, user, spawner):
-        '''Update manager attributes now that we have user and spawner.
+    def dump(self):
+        '''Return contents dict to pretty-print.
         '''
-        # Run methods that depend on the managers having all been
-        #  initialized and then having been given user/spawner info
-        self.log.debug("Updating subordinate managers.")
-        self.volume_mgr.make_volumes_from_config()
-        self.env_mgr.refresh_pod_env()
-        self.namespace_mgr.update_namespace_name()
-        self.spawner.namespace = self.namespace_mgr.namespace
-        if self.config.allow_dask_spawn:
-            self.namespace_mgr.service_account = "dask"
-
-    @gen.coroutine
-    def get_uid(self):
-        return self.uid
+        md = {"parent": str(self.parent),
+              "authenticator": str(self.authenticator),
+              "spawner": str(self.spawner),
+              "user": str(self.user),
+              "api": str(self.api),
+              "rbac_api": str(self.rbac_api),
+              "config": self.config.dump(),
+              "auth_mgr": self.auth_mgr.dump(),
+              "env_mgr": self.env_mgr.dump(),
+              "optionsform_mgr": self.optionsform_mgr.dump(),
+              "quota_mgr": self.quota_mgr.dump(),
+              "volume_mgr": self.volume_mgr.dump()
+              }
+        return md

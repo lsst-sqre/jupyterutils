@@ -26,6 +26,10 @@ class Reaper(SingletonScanner):
         self.keep_weeklies = kwargs.pop('keep_weeklies', 78)
         self.more_cowbell = self.reap
         super().__init__(**kwargs)
+        self.logger.debug(("Keeping: {} weeklies, {} dailies, and {} " +
+                           "experimentals.").format(self.keep_weeklies,
+                                                    self.keep_dailies,
+                                                    self.keep_experimentals))
         if self.registry_url.startswith('registry.hub.docker.com'):
             self.delete_tags = True
 
@@ -54,6 +58,7 @@ class Reaper(SingletonScanner):
         reapable = {}
         for r in reaptags:
             reapable[r] = self._results_map[r]["hash"]
+        self.logger.debug("Images to reap: {}.".format(reapable))
         self.reapable = reapable
 
     def report_reapable(self):
@@ -80,6 +85,7 @@ class Reaper(SingletonScanner):
             self._delete_tags_from_docker_hub()
             return
         for t in tags:
+            self.logger.debug("Attempting to reap '{}'.".format(t))
             h = self.reapable[t]
             path = self.registry_url + "manifests/" + h
             resp = requests.delete(path, headers=headers)

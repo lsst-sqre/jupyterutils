@@ -5,55 +5,37 @@ import time
 from kubernetes.client.rest import ApiException
 from kubernetes import client
 
-from ..utils import (get_execution_namespace, make_logger)
+from ..utils import make_logger
 
 
 class LSSTNamespaceManager(object):
     '''Class to provide namespace manipulation.
     '''
     namespace = None
-    service_account = None
+    service_account = None  # Account for pod to run as
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
         self.log.debug("Creating LSSTNamespaceManager")
         self.parent = kwargs.pop('parent')
 
-    def update_namespace_name(self):
-        '''Build namespace name from user and execution namespace.
-        '''
-        execution_namespace = get_execution_namespace()
-        self.log.debug("Execution namespace: '{}'".format(execution_namespace))
-        user = self.parent.user
-        self.log.debug("User: '{}'".format(user))
-        username = user.escaped_name
-        if execution_namespace and username:
-            self.namespace = "{}-{}".format(execution_namespace,
-                                            username)
-        else:
-            df_msg = "Using 'default' namespace."
-            self.log.warning(df_msg)
-            self.namespace = "default"
+    def set_namespace(self, namespace):
+        self.namespace = namespace
 
     def ensure_namespace(self):
         '''Here we make sure that the namespace exists, creating it if
         it does not.  That requires a ClusterRole that can list and create
         namespaces.
 
-        If we have shadow PVs, we clone the (static) NFS PVs and then
-        attach namespaced PVCs to them.  Thus the role needs to be
-        able to list and create PVs and PVCs.
-
         If we create the namespace, we also create (if needed) a ServiceAccount
         within it to allow the user pod to spawn dask and workflow pods.
 
         '''
-        self.update_namespace_name()
         namespace = self.namespace
+        if not namespace or namespace == "default":
+            raise ValueError("Will not use default namespace!")
         api = self.parent.api
-        if namespace == "default":
-            self.log.warning("Namespace is 'default'; no manipulation.")
-            return
+        cfg = self.parent.config
         ns = client.V1Namespace(
             metadata=client.V1ObjectMeta(name=namespace))
         try:
@@ -69,20 +51,15 @@ class LSSTNamespaceManager(object):
         # Wait for the namespace to actually appear before creating objects
         #  in it.
         self._wait_for_namespace()
-        if self.service_account:
+        if cfg.allow_dask_spawn:
             self.log.debug("Ensuring namespaced service account.")
             self._ensure_namespaced_service_account()
-        else:
-            self.log.debug("No namespaced service account required.")
         if self.parent.spawner.enable_namespace_quotas:
+            # By the time we need this, quota will have been set, because
+            #  we needed it for options form generation.
             self.log.debug("Determining resource quota.")
             qm = self.parent.quota_mgr
-            quota = qm.get_resource_quota_spec()
-            if quota:
-                self.log.debug("Ensuring namespace quota.")
-                qm.ensure_namespaced_resource_quota(quota)
-            else:
-                self.log.debug("No namespace quota required.")
+            qm.ensure_namespaced_resource_quota(qm.quota)
         self.log.debug("Namespace resources ensured.")
 
     def _define_namespaced_account_objects(self):
@@ -112,10 +89,9 @@ class LSSTNamespaceManager(object):
         #        verbs=["list"]
         #    ),
         namespace = self.namespace
-        account = self.service_account
-        if not account:
-            self.log.info("No service account defined.")
-            return (None, None, None)
+        username = self.parent.user.escaped_name
+        account = "{}-{}".format(username, "dask")
+        self.service_account = account
         md = client.V1ObjectMeta(name=account)
         svcacct = client.V1ServiceAccount(metadata=md)
         rules = [
@@ -153,11 +129,8 @@ class LSSTNamespaceManager(object):
         namespace = self.namespace
         api = self.parent.api
         rbac_api = self.parent.rbac_api
-        account = self.service_account
         svcacct, role, rolebinding = self._define_namespaced_account_objects()
-        if not svcacct:
-            self.log.info("Service account not defined.")
-            return
+        account = self.service_account
         try:
             self.log.info("Attempting to create service account.")
             api.create_namespaced_service_account(
@@ -204,11 +177,9 @@ class LSSTNamespaceManager(object):
     def _wait_for_namespace(self, timeout=30):
         '''Wait for namespace to be created.'''
         namespace = self.namespace
-        if namespace == "default":
-            return  # Default doesn't get manipulated
         for dl in range(timeout):
             self.log.debug("Checking for namespace " +
-                           "{} [{}/{}]".format(self.namespace, dl, timeout))
+                           "{} [{}/{}]".format(namespace, dl, timeout))
             nl = self.parent.api.list_namespace(timeout_seconds=1)
             for ns in nl.items:
                 nsname = ns.metadata.name
@@ -228,17 +199,16 @@ class LSSTNamespaceManager(object):
         This requires a cluster role that can delete namespaces.'''
         self.log.debug("Attempting to delete namespace.")
         namespace = self.namespace
-        if namespace == "default":
+        if not namespace or namespace == "default":
             self.log.warning("Cannot delete 'default' namespace")
             return
         podlist = self.parent.api.list_namespaced_pod(namespace)
         clear_to_delete = True
-        if podlist and podlist.items and len(podlist.items) > 0:
+        if podlist and podlist.items:
             clear_to_delete = self._check_pods(podlist.items)
         if not clear_to_delete:
             self.log.info("Not deleting namespace '%s'" % namespace)
             return False
-        self.log.info("Clear to delete namespace '%s'" % namespace)
         self.log.info("Deleting namespace '%s'" % namespace)
         self.parent.api.delete_namespace(namespace)
         return True
@@ -252,10 +222,14 @@ class LSSTNamespaceManager(object):
                         or phase == "Pending"):
                     pname = i.metadata.name
                     if pname.startswith("dask-"):
+                        self.log.debug(
+                            ("Abandoned dask pod '{}' can be " +
+                             "reaped.").format(pname))
                         # We can murder abandoned dask pods
                         continue
-                    self.log.info("Pod in state '%s'; " % phase +
-                                  "cannot delete namespace '%s'." % namespace)
+                    self.log.warning(("Pod in state '{}'; cannot delete " +
+                                      "namespace '{}'.").format(phase,
+                                                                namespace))
                     return False
         return True
 
@@ -276,7 +250,7 @@ class LSSTNamespaceManager(object):
         You don't usually have to call this, since they will get
          cleaned up as part of namespace deletion.
         '''
-        namespace = self.get_user_namespace()
+        namespace = self.namespace
         account = self.service_account
         if not account:
             self.log.info("Service account not defined.")
@@ -296,3 +270,11 @@ class LSSTNamespaceManager(object):
             account,
             namespace,
             dopts)
+
+    def dump(self):
+        '''Return dict for pretty-printing.
+        '''
+        nd = {"namespace": self.namespace,
+              "service_account": self.service_account,
+              "parent": str(self.parent)}
+        return nd

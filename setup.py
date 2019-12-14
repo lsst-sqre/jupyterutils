@@ -67,6 +67,17 @@ setuptools.setup(
             'prepuller = jupyterhubutils.prepuller:standalone',
             'reaper = jupyterhubutils.reaper:standalone',
             'scanrepo = jupyterhubutils.scanrepo:standalone'
-        ]
+        ],
+        'jupyterhub.authenticators': [
+            ('LSSTGitHubOAuthenticator = ' +
+             'jupyterhubutils.authenticator.LSSTGitHubOAuthenticator'),
+            ('LSSTCILogonOAuthenticator = ' +
+             'jupyterhubutils.authenticator.LSSTCILogonOAuthenticator'),
+            ('LSSTJWTAuthenticator = ' +
+             'jupyterhubutils.authenticator.LSSTJWTAuthenticator'),
+        ],
+        'jupyterhub.spawners': [
+            'LSSTSpawner = jupyterhubutils.spawners.LSSTSpawner',
+        ],
     }
 )

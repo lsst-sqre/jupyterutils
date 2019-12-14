@@ -1,10 +1,9 @@
-import json
 import logging
 import os
 from jupyter_client.localinterfaces import public_ips
 from urllib.parse import urlparse
 from .. import Singleton
-from ..utils import (str_bool, make_logger, get_execution_namespace,
+from ..utils import (str_bool, listify, make_logger, get_execution_namespace,
                      sanitize_dict)
 
 
@@ -24,7 +23,7 @@ class LSSTConfig(metaclass=Singleton):
         if self.source == 'environment':
             self.load_from_environment()
         if self.debug:
-            logging.basicConfig(level=logging.DEBUG)
+            self.log.setLevel(logging.DEBUG)
         self.create_derived_settings()
 
     def load_from_environment(self):
@@ -38,37 +37,49 @@ class LSSTConfig(metaclass=Singleton):
         self.oauth_client_id = os.getenv('OAUTH_CLIENT_ID')
         self.oauth_client_secret = os.getenv('OAUTH_CLIENT_SECRET')
         self.oauth_callback_url = os.getenv('OAUTH_CALLBACK_URL')
-        self.logout_url = os.getenv("LOGOUT_URL")
         # Authenticator-specific parameters
+        # Yes, really "sign_in".  Blame BVan.
+        self.jwt_logout_url = os.getenv("LOGOUT_URL") or '/oauth2/sign_in'
+        self.jwt_signing_certificate = (os.getenv('JWT_SIGNING_CERTIFICATE') or
+                                        '/opt/jwt/signing-certificate.pem')
         self.cilogon_host = os.getenv('CILOGON_HOST') or 'cilogon.org'
         self.cilogon_skin = os.getenv('CILOGON_SKIN') or 'LSST'
         self.cilogon_idp = os.getenv('CILOGON_IDP_SELECTION')
-        self.cilogon_allowlist = os.getenv('CILOGON_GROUP_WHITELIST')
-        self.cilogon_denylist = os.getenv('CILOGON_GROUP_DENYLIST')
+        self.cilogon_allowlist = listify(os.getenv('CILOGON_GROUP_WHITELIST'))
+        self.cilogon_denylist = listify(os.getenv('CILOGON_GROUP_DENYLIST'))
         self.strict_ldap_groups = str_bool(os.getenv('STRICT_LDAP_GROUPS'))
         self.github_host = os.getenv('GITHUB_HOST') or 'github.com'
-        self.github_denylist = os.getenv('GITHUB_ORGANIZATION_DENYLIST')
+        self.github_allowlist = listify(
+            os.getenv('GITHUB_ORGANIZATION_WHITELIST'))
+        self.github_denylist = listify(
+            os.getenv('GITHUB_ORGANIZATION_DENYLIST'))
         # Settings for Options Form
         self.form_selector_title = (os.getenv('LAB_SELECTOR_TITLE') or
                                     'Container Image Selector')
         self.form_template = (os.getenv('OPTIONS_FORM_TEMPLATE') or
                               ('/opt/lsst/software/jupyterhub/templates/' +
                                'options_form.template.html'))
-        self.form_sizelist = ['tiny', 'small', 'medium', 'large']
-        sizestr = os.getenv('OPTIONS_FORM_SIZELIST')
-        if sizestr:
-            self.form_sizelist = sizestr.split(',')
+        self.form_sizelist = (listify(os.getenv('OPTIONS_FORM_SIZELIST')) or
+                              ['tiny', 'small', 'medium', 'large'])
+        self.max_scan_delay = int(os.getenv('MAX_SCAN_DELAY', 300))
+        self.initial_scan_interval = float(
+            os.getenv('INITIAL_SCAN_INTERVAL', 0.2))
+        self.max_scan_interval = float(os.getenv('MAX_SCAN_INTERVAL', 5.0))
         self.tiny_cpu = float(os.getenv('TINY_MAX_CPU', 0.5))
         self.mb_per_cpu = int(os.getenv('MB_PER_CPU', 2048))
         self.size_index = int(os.getenv('SIZE_INDEX', 1))
         # Settings for Quota Manager
+        self.resource_map = (os.getenv('RESOURCE_MAP') or
+                             '/opt/lsst/software/jupyterhub/resources/' +
+                             'resourcemap.json')
         self.max_dask_workers = int(os.getenv('MAX_DASK_WORKERS', 25))
         # Settings for Volume Manager
         self.volume_definition_file = (os.getenv('VOLUME_DEFINITION_FILE') or
                                        ('/opt/lsst/software/jupyterhub/' +
                                         'mounts/mountpoints.json'))
         # Hub settings for Lab spawning
-        self.lab_default_image = os.getenv('LAB_IMAGE')
+        self.lab_default_image = (os.getenv('LAB_IMAGE') or
+                                  "lsstsqre/sciplat-lab:latest")
         self.mem_limit = os.getenv('LAB_MEM_LIMIT') or '2048M'
         self.cpu_limit = os.getenv('LAB_CPU_LIMIT') or '1.0'
         self.mem_guarantee = os.getenv('LAB_MEM_GUARANTEE') or '1M'
@@ -171,7 +182,7 @@ class LSSTConfig(metaclass=Singleton):
                     self.external_instance_url = ehu[:-len(self.hub_route)]
 
     def dump(self):
-        '''Pretty-print config contents.
+        '''Return dict for pretty printing.
         '''
         myvars = vars(self)
         sanitized = sanitize_dict(myvars, ['oauth_client_secret',
@@ -182,4 +193,4 @@ class LSSTConfig(metaclass=Singleton):
             val = sanitized.get(key)
             if val:
                 sanitized[key] = str(val)
-        return json.dumps(sanitized, sort_keys=True, indent=4)
+        return sanitized

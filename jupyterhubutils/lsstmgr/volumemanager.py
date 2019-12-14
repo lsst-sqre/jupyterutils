@@ -1,17 +1,14 @@
-'''Class to provide support for document-driven Volume assignment.
-'''
-
 import base64
 import json
 import os
 import yaml
-
-from ..utils import make_logger
-
 from kubernetes import client
+from ..utils import make_logger
 
 
 class LSSTVolumeManager(object):
+    '''Class to provide support for document-driven Volume assignment.
+    '''
     volume_list = []
     k8s_volumes = []
     k8s_vol_mts = []
@@ -33,10 +30,8 @@ class LSSTVolumeManager(object):
         with open(config_file, "r") as fp:
             config = json.load(fp)
         for mtpt in config:
-            self.log.debug("mtpt: %r" % mtpt)
             mountpoint = mtpt["mountpoint"]  # Fatal error if it doesn't exist
             if mtpt.get("disabled"):
-                self.log.debug("Skipping disabled mountpoint %s" % mountpoint)
                 continue
             if mountpoint[0] != "/":
                 mountpoint = "/" + mountpoint
@@ -57,34 +52,26 @@ class LSSTVolumeManager(object):
                 "export": export,
                 "mode": mode,
             })
-        self.log.debug("Volume list: %r" % vollist)
         self.volume_list = vollist
-        volumes, mtpts = self._make_k8s_object_representations()
-        self.k8s_volumes = volumes
-        self.k8s_vol_mts = mtpts
+        self.log.debug("Volumes: {}".format(vollist))
+        self._define_k8s_object_representations()
 
-    def _make_k8s_object_representations(self):
-        volumes = []
-        mtpts = []
+    def _define_k8s_object_representations(self):
+        self.k8s_volumes = []
+        self.k8s_vol_mts = []
         for vol in self.volume_list:
-            k8svol, k8smt = self._make_k8s_vol_objs(vol)
-            if k8svol:
-                volumes.append(k8svol)
-                mtpts.append(k8smt)
-        return (volumes, mtpts)
+            k8svol = None
+            k8smt = None
+            if vol.get("hostpath"):
+                k8svol = self._define_k8s_hostpath_vol(vol)
+            else:
+                k8svol = self._define_k8s_nfs_vol(vol)
+            k8smt = self._define_k8s_mtpt(vol)
+            if k8svol and k8smt:
+                self.k8s_volumes.append(k8svol)
+                self.k8s_vol_mts.append(k8smt)
 
-    def _make_k8s_vol_objs(self, vol):
-        k8svol = None
-        k8smt = None
-        if vol.get("hostpath"):
-            k8svol = self._make_k8s_hostpath_vol(vol)
-            k8smt = self._make_k8s_hostpath_mt(vol)
-        else:
-            k8svol = self._make_k8s_nfs_vol(vol)
-            k8smt = self._make_k8s_nfs_mt(vol)
-        return k8svol, k8smt
-
-    def _make_k8s_hostpath_vol(self, vol):
+    def _define_k8s_hostpath_vol(self, vol):
         return client.V1Volume(
             name=self._get_volume_name_for_mountpoint(vol["mountpoint"]),
             host_path=client.V1HostPath(
@@ -92,7 +79,7 @@ class LSSTVolumeManager(object):
             )
         )
 
-    def _make_k8s_nfs_vol(self, vol):
+    def _define_k8s_nfs_vol(self, vol):
         knf = client.V1NFSVolumeSource(
             path=vol["export"],
             server=vol["host"]
@@ -104,7 +91,7 @@ class LSSTVolumeManager(object):
             nfs=knf
         )
 
-    def _make_k8s_hostpath_mt(self, vol):
+    def _define_k8s_mtpt(self, vol):
         mt = client.V1VolumeMount(
             mount_path=vol["mountpoint"],
             name=self._get_volume_name_for_mountpoint(vol["mountpoint"]),
@@ -113,14 +100,10 @@ class LSSTVolumeManager(object):
             mt.read_only = True
         return mt
 
-    def _make_k8s_nfs_mt(self, vol):
-        return self._make_k8s_hostpath_mt(vol)
-
     def _get_volume_name_for_mountpoint(self, mountpoint):
         return mountpoint[1:].replace('/', '-')
 
-    def _get_volume_yaml(self, left_pad=0):
-        pad = " " * left_pad
+    def _get_volume_yaml_str(self, left_pad=0):
         vols = self.k8s_volumes
         if not vols:
             self.log.warning("No volumes defined.")
@@ -143,12 +126,9 @@ class LSSTVolumeManager(object):
             vl.append(vo)
         vs = {"volumes": vl}
         ystr = yaml.dump(vs)
-        ylines = ystr.split("\n")
-        padlines = [pad + l for l in ylines]
-        return "\n".join(padlines)
+        return self._left_pad(ystr, left_pad)
 
-    def _get_volume_mount_yaml(self, left_pad=0):
-        pad = " " * left_pad
+    def _get_volume_mount_yaml_str(self, left_pad=0):
         vms = self.k8s_vol_mts
         if not vms:
             self.log.warning("No volume mounts defined.")
@@ -163,7 +143,11 @@ class LSSTVolumeManager(object):
             vl.append(vo)
         vs = {"volumeMounts": vl}
         ystr = yaml.dump(vs)
-        ylines = ystr.split("\n")
+        return self._left_pad(ystr, left_pad)
+
+    def _left_pad(self, line_str, left_pad=0):
+        pad = ' ' * left_pad
+        ylines = line_str.split("\n")
         padlines = [pad + l for l in ylines]
         return "\n".join(padlines)
 
@@ -171,9 +155,17 @@ class LSSTVolumeManager(object):
         '''Return the base-64 encoding of the K8s statements to create
         the pod's mountpoints.  Probably better handled as a ConfigMap.
         '''
-        vmt_yaml = self._get_volume_mount_yaml(left_pad=4)
-        vol_yaml = self._get_volume_yaml(left_pad=2)
-        ystr = vmt_yaml + "\n" + vol_yaml
-        self.log.debug("Dask yaml:\n%s" % ystr)
+        vmt_yaml_str = self._get_volume_mount_yaml_str(left_pad=4)
+        vol_yaml_str = self._get_volume_yaml_str(left_pad=2)
+        ystr = "{}\n{}".format(vmt_yaml_str, vol_yaml_str)
         benc = base64.b64encode(ystr.encode('utf-8')).decode('utf-8')
         return benc
+
+    def dump(self):
+        '''Return contents dict for aggregation and pretty-printing.
+        '''
+        vd = {"parent": str(self.parent),
+              "volume_list": self.volume_list,
+              "k8s_volumes": [str(x) for x in self.k8s_volumes],
+              "k8s_vol_mts": [str(x) for x in self.k8s_vol_mts]}
+        return vd
