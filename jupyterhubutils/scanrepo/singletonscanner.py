@@ -40,24 +40,26 @@ class SingletonScanner(ScanRepo, metaclass=Singleton):
     def scan(self):
         '''Execute repo scan.
         '''
-        _maxdelay = 300
-        _initialdelay = 5
+        _timeout = 300
+        _initialdelay = 0.2
+        _maxdelay = 15
         _sofar = 0
         delay = _initialdelay
         if self.scanning:
             while not self._results:
-                # If there have been no results, wait up to _maxdelay seconds
+                # If there have been no results, wait up to _timeout seconds
                 #  for them.
-                self.logger.info(
+                self.logger.debug(
                     "Scan in progress; waiting {}s for results.".format(delay))
                 time.sleep(delay)
                 _sofar += delay
-                if _sofar >= _maxdelay:
-                    self.logger.warning("Scan in progress never finished.")
-                    break
+                if _sofar >= _timeout:
+                    raise ValueError("Scan in progress never finished.")
                 delay *= 2
-                if _sofar + delay > _maxdelay:
-                    delay = _maxdelay - _sofar
+                if delay > _maxdelay:
+                    delay = _maxdelay
+                if _sofar + delay > _timeout:
+                    delay = _timeout - _sofar
             return  # Use cached (possibly stale) version if results exist.
         self.scanning = True
         now = datetime.datetime.utcnow()
@@ -79,7 +81,21 @@ class SingletonScanner(ScanRepo, metaclass=Singleton):
         last_updated = self.last_updated
         if ((now - last_updated) > max_age):
             self.logger.info("Scan data has expired.")
-            self.scan()
+            if self.scanning:
+                self.logger.info("Waiting for scan results.")
+                count = 0
+                while True:
+                    time.sleep(0.2)
+                    count = count + 1
+                    if not (count % 50):
+                        self.logger.debug(
+                            "Waiting for data: {}s".format(count / 5))
+                    if self.data:
+                        break
+            else:
+                self.logger.info("Beginning new scan.")
+                self.scan()
+            self.logger.debug("Exiting _scan_if_needed() wait loop.")
 
     def get_data(self):
         '''Return repo data.

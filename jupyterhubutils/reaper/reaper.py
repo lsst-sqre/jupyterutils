@@ -34,7 +34,8 @@ class Reaper(SingletonScanner):
             self.delete_tags = True
 
     def _categorize_tags(self):
-        tags = self.get_all_tags()  # Will wait for initial scan
+        tags = self.get_all_tags()  # Should wait for initial scan
+        self.logger.debug("tags = {}".format(tags))
         for t in tags:
             if t.startswith('w'):
                 self._categorized_tags["weekly"].append(t)
