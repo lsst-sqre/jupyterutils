@@ -200,7 +200,7 @@ class LSSTNamespaceManager(object):
         self.log.debug("Attempting to delete namespace.")
         namespace = self.namespace
         if not namespace or namespace == "default":
-            self.log.warning("Cannot delete 'default' namespace")
+            raise RuntimeError("Cannot delete default namespace!")
             return
         podlist = self.parent.api.list_namespaced_pod(namespace)
         clear_to_delete = True

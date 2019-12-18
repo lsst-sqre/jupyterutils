@@ -175,9 +175,7 @@ class LSSTAuthManager(object):
         self.uid = ast["uid"]
         if not self.uid:
             raise RuntimeError("Cannot determine user UID for pod spawn!")
-        if not self.group_map:
-            self.log.warning("Trying to get group map from auth_state.")
-            self.group_map = ast["group_map"]
+        self.group_map = ast["group_map"]
         if not self.group_map:
             raise RuntimeError("Cannot determine user groups for pod spawn!")
         groupstr = self.get_group_string()
