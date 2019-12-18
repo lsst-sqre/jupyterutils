@@ -1,6 +1,5 @@
 import datetime
 import functools
-import hashlib
 import json
 import logging
 import re
@@ -9,12 +8,14 @@ import semver
 import urllib.parse
 import urllib.request
 
+from ..utils import make_logger
+
 
 class ScanRepo(object):
-    """Class to scan repository and create results.
+    '''Class to scan repository and create results.
 
        Based on:
-       https://github.com/shangteus/py-dockerhub/blob/master/dockerhub.py"""
+       https://github.com/shangteus/py-dockerhub/blob/master/dockerhub.py'''
 
     host = 'hub.docker.com'
     path = ''
@@ -44,9 +45,12 @@ class ScanRepo(object):
                  json=False, port=None,
                  cachefile=None,
                  insecure=False, sort_field="", debug=False):
-        logging.basicConfig()
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.INFO)
+        if debug:
+            self.debug = debug
+        self.logger = make_logger()
+        if debug:
+            self.logger.setLevel(logging.DEBUG)
+            self.logger.debug("Debug logging enabled.")
         if host:
             self.host = host
         if path:
@@ -71,10 +75,6 @@ class ScanRepo(object):
             protocol = "http"
         if sort_field:
             self.sort_field = sort_field
-        if debug:
-            self.debug = debug
-            self.logger.setLevel(logging.DEBUG)
-            self.logger.debug("Debug logging on.")
         exthost = self.host
         reghost = exthost
         if reghost == "hub.docker.com":
@@ -101,12 +101,14 @@ class ScanRepo(object):
         self.close()
 
     def close(self):
-        """Close the session"""
+        '''Close the session.
+        '''
         if self._session:
             self._session.close()
 
     def extract_image_info(self):
-        """Build image name list and image description list"""
+        '''Build image name list and image description list.
+        '''
         cs = []
         if (self.recommended and "recommended" in self.data):
             cs.extend(self.data["recommended"])
@@ -144,22 +146,16 @@ class ScanRepo(object):
                 updated = self._convert_time(updatedstr)
             if ihash and updated:
                 if (tag not in nm or (nm[tag]["updated"] < updated)):
-                    self.logger.debug(
-                        "Updating name map for {}".format(tag))
                     nm[tag] = {"hash": ihash,
                                "updated": updated}
                     if ilayers:
                         nm[tag]["layers"] = ilayers
                 if tag not in rm:
-                    self.logger.debug(
-                        "Creating result entry for {}".format(tag))
                     rm[tag] = {"last_updated": updatedstr,
                                "name": tag}
                 else:
                     l_updated = self._convert_time(rm[tag]["last_updated"])
                     if l_updated < updated:
-                        self.logger.debug(
-                            "Updating result entry for {}".format(tag))
                         rm[tag] = {"last_updated": updatedstr,
                                    "name": tag}
 
@@ -232,17 +228,21 @@ class ScanRepo(object):
         return ld
 
     def resolve_tag(self, tag):
-        """Resolve a tag (used for "recommended" or "latest*" """
+        '''Resolve a tag (used for "recommended" or "latest*").
+        '''
         mfest = self._name_to_manifest.get(tag)
         if not mfest:
+            self.logger.debug("Did not find manifest for '{}'".format(tag))
             return None
         hash = mfest.get("hash")
+        self.logger.debug("Tag '{}' hash -> '{}'".format(tag, hash))
         if not hash:
             return None
         for k in self._name_to_manifest:
             if (k.startswith("recommended") or k.startswith("latest")):
                 continue
             if self._name_to_manifest[k].get("hash") == hash:
+                self.logger.debug("Found matching hash for tag '{}'".format(k))
                 return k
 
     def _data_to_json(self):
@@ -274,7 +274,8 @@ class ScanRepo(object):
             return dstr
 
     def report(self):
-        """Print the tag data"""
+        '''Print the tag data.
+        '''
         if self.json:
             print(self._data_to_json())
         else:
@@ -287,11 +288,13 @@ class ScanRepo(object):
             print("export LAB_CONTAINER_NAMES LAB_CONTAINER_DESCS")
 
     def get_data(self):
-        """Return the tag data"""
+        '''Return the tag data.
+        '''
         return self.data
 
     def get_all_tags(self):
-        """Return all tags in the repository."""
+        '''Return all tags in the repository (sorted by last_updated).
+        '''
         return self._all_tags
 
     def _get_url(self, **kwargs):
@@ -308,6 +311,8 @@ class ScanRepo(object):
         return page
 
     def scan(self):
+        '''Perform the repository scan.
+        '''
         url = self.url
         self.logger.debug("Beginning repo scan of '{}'.".format(url))
         results = []
@@ -403,9 +408,8 @@ class ScanRepo(object):
         if authtok:
             headers.update({"Authorization": "Bearer {}".format(authtok)})
         for name in check_names:
-            self.logger.debug("Getting hash for '{}' tag.".format(name))
             resp = requests.head(baseurl + "manifests/{}".format(name),
-                                headers=headers)
+                                 headers=headers)
             ihash = resp.headers["Docker-Content-Digest"]
             namemap[name]["hash"] = ihash
             results[name]["hash"] = ihash
@@ -413,7 +417,6 @@ class ScanRepo(object):
             if dstr:
                 dt = self._convert_time(dstr)
                 namemap[name]["updated"] = dt
-            self.logger.debug("{} hash: {}".format(name, ihash))
         self._name_to_manifest.update(namemap)
         if self.cachefile:
             self._writecachefile()
@@ -510,9 +513,16 @@ class ScanRepo(object):
             ict = imap[ikey]["count"]
             if ict:
                 r[ikey] = displayorder[idx][:ict]
-        all_tags = sorted(list(self._results_map.keys()))
+        all_tags = self._sort_tags_by_date()
         self._all_tags = all_tags
         self.data = r
+
+    def _sort_tags_by_date(self):
+        items = [x[1] for x in self._results_map.items()]
+        dec = [(x['last_updated'], x['name']) for x in items]
+        dec.sort(reverse=True)
+        tags = [x[1] for x in dec]
+        return tags
 
     def _sort_images_by_name(self, clist):
         # We have a flag day where we start putting underscores into

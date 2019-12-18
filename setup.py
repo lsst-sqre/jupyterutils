@@ -1,6 +1,5 @@
-"""
-Setup Module for LSST Jupyter Hub Utilities
-"""
+'''Setup module for LSST JupyterHub Utilities.
+'''
 import codecs
 import io
 import os
@@ -8,9 +7,9 @@ import setuptools
 
 
 def get_version(file, name='__version__'):
-    """Get the version of the package from the given file by
+    '''Get the version of the package from the given file by
     executing it and extracting the given `name`.
-    """
+    '''
     path = os.path.realpath(file)
     version_ns = {}
     with io.open(path, encoding="utf8") as f:
@@ -19,7 +18,8 @@ def get_version(file, name='__version__'):
 
 
 def local_read(filename):
-    """Convenience function for includes"""
+    '''Convenience function for includes.
+    '''
     full_filename = os.path.join(
         os.path.abspath(os.path.dirname(__file__)),
         filename)
@@ -53,14 +53,31 @@ setuptools.setup(
     keywords='lsst',
     install_requires=[
         'requests>=2.0.0,<3.0.0',
-        'kubernetes>=9.0.0,<11.0.0',
-        'semver>=2.0.0,<3.0.0'
+        'kubernetes>=9.0.0,<10.0.0',
+        'semver>=2.0.0,<3.0.0',
+        'oauthenticator>=0.9.0,<1.0.0',
+        'jupyter-client>=5.0.0,<6.0.0',
+        'jupyterhub-jwtauthenticator>=0.1.0,<1.0.0',
+        'jupyterhub-kubespawner>=0.10.0,<1.0.0',
+        'namespacedkubespawner>=0.0.21,<1.0.0',
+        'jinja2>=2.0.0,<3.0.0'
     ],
     entry_points={
         'console_scripts': [
             'prepuller = jupyterhubutils.prepuller:standalone',
             'reaper = jupyterhubutils.reaper:standalone',
             'scanrepo = jupyterhubutils.scanrepo:standalone'
-        ]
+        ],
+        'jupyterhub.authenticators': [
+            ('LSSTGitHubOAuthenticator = ' +
+             'jupyterhubutils.authenticator.LSSTGitHubOAuthenticator'),
+            ('LSSTCILogonOAuthenticator = ' +
+             'jupyterhubutils.authenticator.LSSTCILogonOAuthenticator'),
+            ('LSSTJWTAuthenticator = ' +
+             'jupyterhubutils.authenticator.LSSTJWTAuthenticator'),
+        ],
+        'jupyterhub.spawners': [
+            'LSSTSpawner = jupyterhubutils.spawners.LSSTSpawner',
+        ],
     }
 )

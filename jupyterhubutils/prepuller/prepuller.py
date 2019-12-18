@@ -10,11 +10,12 @@ from threading import Thread
 from kubernetes import client, config
 from kubernetes.config.config_exception import ConfigException
 from jupyterhubutils.scanrepo import ScanRepo
+from ..utils import make_logger
 
 
 class Prepuller(object):
-    """Class for generating and reaping the Pods for the prepuller.
-    """
+    '''Class for generating and reaping the Pods for the prepuller.
+    '''
     repo = None
     logger = None
     client = None
@@ -49,15 +50,14 @@ class Prepuller(object):
     created_pods = []
 
     def __init__(self, args=None):
-        logging.basicConfig()
-        self.logger = logging.getLogger(__name__)
         if args:
             self.args = args
         if self.args and self.args.debug:
+            self.debug = True
+        self.logger = make_logger()
+        if self.debug:
             self.logger.setLevel(logging.DEBUG)
-            self.logger.debug("Debug logging on.")
-        else:
-            self.logger.setLevel(logging.INFO)
+            self.logger.debug("Debug logging enabled.")
         namespace = None
         try:
             config.load_incluster_config()
@@ -114,10 +114,10 @@ class Prepuller(object):
         raise RuntimeError("Timed out")
 
     def _destroy_pods(self, selective=False):
-        """Get a pod list and delete any that are still running if
+        '''Get a pod list and delete any that are still running if
         selective is False, or any in state "Succeeded" or "Failed"
         if selective is True.
-        """
+        '''
         self.logger.debug("Looking for pods to delete.")
         cleanup = self._get_deletion_list(selective=selective)
         for podname in cleanup:
@@ -146,8 +146,8 @@ class Prepuller(object):
         return cleanup
 
     def update_images_from_repo(self):
-        """Scan the repo looking for images.
-        """
+        '''Scan the repo looking for images.
+        '''
         if not self.repo:
             self.repo = ScanRepo(host=self.args.repo,
                                  path=self.args.path,
@@ -203,9 +203,9 @@ class Prepuller(object):
             self.images = current_imgs
 
     def build_nodelist(self):
-        """Make a list of all schedulable nodes, respecting RESTRICT_*
+        '''Make a list of all schedulable nodes, respecting RESTRICT_*
         environment variables.
-        """
+        '''
         v1 = self.client
         logger = self.logger
         logger.debug("Getting schedulable node list.")
@@ -226,9 +226,9 @@ class Prepuller(object):
         self.nodes = nodes
 
     def reject_by_label(self, node):
-        """If node labels are set to restrict Lab spawn, reject nodes that
+        '''If node labels are set to restrict Lab spawn, reject nodes that
         are not suitable for Lab/Dask.
-        """
+        '''
         logger = self.logger
         logger.debug("Checking for node labels.")
         if not os.getenv("RESTRICT_LAB_NODES"):
@@ -257,9 +257,9 @@ class Prepuller(object):
         return True
 
     def build_pod_specs(self):
-        """Build a dict of Pod specs by node, each node having a list of
+        '''Build a dict of Pod specs by node, each node having a list of
         specs.
-        """
+        '''
         specs = {}
         for node in self.nodes:
             specs[node] = []
@@ -292,18 +292,18 @@ class Prepuller(object):
         return iname
 
     def clean_completed_pods(self):
-        """Get a pod list and delete any that are in the speclist and have
+        '''Get a pod list and delete any that are in the speclist and have
         already run to completion.
-        """
+        '''
         self._destroy_pods(selective=True)
 
     def start_single_pod(self, spec):
-        """Run a pod, with a single container, on a particular node.
+        '''Run a pod, with a single container, on a particular node.
         (Assuming that the pod is itself tied to a node in the pod spec.)
         This has the effect of pulling the image for that pod onto that
         node.  The run itself is unimportant.  It returns the name of the
         created pod.
-        """
+        '''
         v1 = self.client
         name = self._derive_pod_name(spec)
         pod = client.V1Pod(spec=spec,
@@ -317,14 +317,14 @@ class Prepuller(object):
         return podname
 
     def _derive_pod_name(self, spec):
-        """Pod name is based on image and node.
-        """
+        '''Pod name is based on image and node.
+        '''
         return ("pp-" + self._podname_from_image(spec.containers[0].image) +
                 "-" + spec.node_name.split('-')[-1])
 
     def run_pods(self):
-        """Run pods for all nodes.  Parallelize across nodes.
-        """
+        '''Run pods for all nodes.  Parallelize across nodes.
+        '''
         tlist = []
         for node in self.pod_specs:
             speclist = list(self.pod_specs[node])
@@ -337,11 +337,11 @@ class Prepuller(object):
             thd.join()
 
     def run_pods_for_node(self, node, speclist):
-        """Execute pods one at a time, so we don't overwhelm I/O.
+        '''Execute pods one at a time, so we don't overwhelm I/O.
         Execute this method in parallel across all nodes for best
         results.  Each node should have its own I/O, so they should all be
         busy at once.
-        """
+        '''
         self.logger.debug("Running pods for node %s" % node)
         for spec in speclist:
             name = spec.containers[0].name
@@ -351,10 +351,10 @@ class Prepuller(object):
             self.wait_for_pod(podname)
 
     def wait_for_pod(self, podname, delay=1, max_tries=3600):
-        """Wait for a particular pod to go into phase "Succeeded" or
+        '''Wait for a particular pod to go into phase "Succeeded" or
         "Failed", and then delete the pod.
         Raise an exception if the delay timer expires.
-        """
+        '''
         v1 = self.client
         namespace = self.namespace
         tries = 1
@@ -378,8 +378,8 @@ class Prepuller(object):
             tries = tries + 1
 
     def delete_pod(self, podname):
-        """Delete a named pod.
-        """
+        '''Delete a named pod.
+        '''
         v1 = self.client
         self.logger.debug("Deleting pod %s" % podname)
         v1.delete_namespaced_pod(podname, self.namespace)

@@ -4,6 +4,8 @@ from .scanrepo import ScanRepo
 
 
 def standalone():
+    '''Standalone command for scanning repo.
+    '''
     args = parse_args()
     scanner = ScanRepo(host=args.repo,
                        path=args.path,
@@ -24,7 +26,8 @@ def standalone():
 
 
 def parse_args():
-    """Parse command-line arguments"""
+    '''Parse command-line arguments.
+    '''
     desc = "Get list of Lab Images for display or prepulling"
     parser = argparse.ArgumentParser(description=desc)
     parser.add_argument("-d", "--debug", action="store_true",
