@@ -62,5 +62,5 @@ class LSSTAuthenticator(Authenticator):
         in a timely fashion.
         '''
         self.lsst_mgr.optionsform_mgr.options_form_data = None
-        retval = super().refresh_user()
+        retval = await super().refresh_user()
         return retval
