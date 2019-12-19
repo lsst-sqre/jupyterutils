@@ -39,7 +39,7 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
         #  It's cheating, but we'll just check to see if there is
         #  a custom method for refresh_user on the handler and call it
         #  if so.  That's true for the LSST JWT Authenticator case.
-        retval = super().refresh_user(user, handler)
+        retval = await super().refresh_user(user, handler)
         if handler.hasattr('refresh_user'):
             return await handler.refresh_user(user, handler)
         else:
