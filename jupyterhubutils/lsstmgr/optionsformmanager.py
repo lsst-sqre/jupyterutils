@@ -26,8 +26,10 @@ class LSSTOptionsFormManager(object):
         '''Create an LSST Options Form from parent's config object.
         '''
         # Make options form by scanning container repository, then cache it.
-        # For a single spawning session, you always get the same form.  That's
-        # OK.
+        # For a single spawning session, you always get the same form.
+        #
+        # If that's not OK (long-lived tokens, for example) then in
+        #  your authenticator's refresh_user(), clear options_form_data.
         self.log.debug("Creating options form.")
         if self.options_form_data:
             self.log.debug("Returning cached options form.")
