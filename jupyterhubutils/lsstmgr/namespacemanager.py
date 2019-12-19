@@ -186,7 +186,8 @@ class LSSTNamespaceManager(object):
                 if nsname == namespace:
                     self.log.debug("Namespace {} found.".format(namespace))
                     return
-                self.log.debug("Namespace {} not present yet.")
+                self.log.debug(
+                    "Namespace {} not present yet.".format(namespace))
             time.sleep(1)
         raise RuntimeError(
             "Namespace '{}' was not created in {} seconds!".format(namespace,
