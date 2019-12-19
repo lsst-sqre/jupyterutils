@@ -1,5 +1,6 @@
 '''LSST Authenticator to use JWT token present in request headers.
 '''
+import asyncio
 from jwtauthenticator.jwtauthenticator import JSONWebTokenAuthenticator
 from .lsstauth import LSSTAuthenticator
 from .lsstjwtloginhandler import LSSTJWTLoginHandler
@@ -30,3 +31,13 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
         '''Returns the logout URL for JWT.
         '''
         return self.lsst_mgr.config.jwt_logout_url
+
+    async def refresh_user(self, user, handler):
+        '''Delegate to login handler, if this happens in the login
+        '''
+        # We don't want to do this anywhere but on the login handler.
+        #  It's cheating, but we'll just check to see if there is
+        #  a custom method for refresh_user on the handler and call it
+        #  if so.  That's true for the LSST JWT Authenticator case.
+        if handler.hasattr('refresh_user'):
+            return await handler.refresh_user(user, handler)
