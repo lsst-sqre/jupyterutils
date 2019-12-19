@@ -1,5 +1,6 @@
 '''This is a mixin class for authenticators for common LSST functionality.
 '''
+import asyncio
 from jupyterhub.auth import Authenticator
 from .. import LSSTMiddleManager
 from ..config import LSSTConfig
@@ -53,3 +54,13 @@ class LSSTAuthenticator(Authenticator):
               "lsst_mgr": self.lsst_mgr.dump()
               }
         return ad
+
+    async def refresh_user(self, user, handler=None):
+        '''On each refresh_user, clear the options form cache, thus
+        forcing it to be rebuilt on next display.  Otherwise it is built once
+        per user session, which is not frequent enough to display new images
+        in a timely fashion.
+        '''
+        self.lsst_mgr.optionsform_mgr.options_form_data = None
+        retval = await super().refresh_user()
+        return retval
