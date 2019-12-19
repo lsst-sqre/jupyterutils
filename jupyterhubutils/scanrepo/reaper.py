@@ -1,7 +1,7 @@
 import datetime
 import os
 import requests
-from jupyterhubutils.scanrepo import SingletonScanner
+from . import SingletonScanner
 
 
 class Reaper(SingletonScanner):
@@ -19,11 +19,13 @@ class Reaper(SingletonScanner):
     keep_dailies = 15
     keep_weeklies = 78
     delete_tags = False
+    dry_run = False
 
     def __init__(self, *args, **kwargs):
         self.keep_experimentals = kwargs.pop('keep_experimentals', 10)
         self.keep_dailies = kwargs.pop('keep_dailies', 15)
         self.keep_weeklies = kwargs.pop('keep_weeklies', 78)
+        self.dry_run = kwargs.pop('dry_run', False)
         self.more_cowbell = self.reap
         super().__init__(**kwargs)
         self.logger.debug(("Keeping: {} weeklies, {} dailies, and {} " +
@@ -35,7 +37,6 @@ class Reaper(SingletonScanner):
 
     def _categorize_tags(self):
         tags = self.get_all_tags()  # Should wait for initial scan
-        self.logger.debug("tags = {}".format(tags))
         for t in tags:
             if t.startswith('w'):
                 self._categorized_tags["weekly"].append(t)
@@ -78,6 +79,9 @@ class Reaper(SingletonScanner):
         tags = list(self.reapable.keys())
         if not tags:
             self.logger.info("No images to reap.")
+            return
+        if self.dry_run:
+            self.logger.info("Dry run: images to reap: {}".format(tags))
             return
         headers = {
             "Accept": "application/vnd.docker.distribution.manifest.v2+json"}

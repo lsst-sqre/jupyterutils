@@ -64,8 +64,8 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'prepuller = jupyterhubutils.prepuller:standalone',
-            'reaper = jupyterhubutils.reaper:standalone',
+            'prepuller = jupyterhubutils.scanrepo:prepullerstandalone',
+            'reaper = jupyterhubutils.scanrepo:reaperstandalone',
             'scanrepo = jupyterhubutils.scanrepo:standalone'
         ],
         'jupyterhub.authenticators': [

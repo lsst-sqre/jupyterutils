@@ -25,8 +25,10 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
     rbac_api = None  # We need an RBAC client
 
     def __init__(self, *args, **kwargs):
+        if not self.log:
+            self.log = make_logger()
         super().__init__(*args, **kwargs)
-        self.log = make_logger()
+
         self.rbac_api = shared_client('RbacAuthorizationV1Api')
 
         selected_pod_reflector_classref = MultiNamespacePodReflector
@@ -50,8 +52,14 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         self.__class__.event_reflector = selected_event_reflector_classref(
             parent=self, namespace=self.namespace)
 
-        # Restart pod/event watcher
+        # Defer event watcher startup to auth_state_hook to prevent
+        #  initialization loop
+        self.log.debug("MultiNamespaceSpawner initialized.")
 
+    def auth_state_hook(self, auth_state):
+        # Start the watchers.
+        # Restart pod/event watcher
+        self.log.debug("{} auth_state_hook firing.".format(__name__))
         self._start_watching_pods(replace=True)
         if self.events_enabled:
             self._start_watching_events(replace=True)

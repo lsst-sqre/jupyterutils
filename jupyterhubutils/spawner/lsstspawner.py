@@ -58,32 +58,31 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
-        self.log.debug("Creating LSSTSpawner.")
         super().__init__(*args, **kwargs)
+        self.log.debug("Creating LSSTSpawner.")
         # Our API and our RBAC API are set in the super() __init__()
         # We assume that we're using an LSST Authenticator, which will
         #  therefore have an LSST MiddleManager.
         #
         # This might change with Argo Workflow.
+        # self.log.debug("Spawner: {}".format(json.dumps(self.dump())))
+        self.log.debug("Initialized {}".format(__name__))
+
+    def auth_state_hook(self, auth_state):
+        # Turns out this is in the wrong place.  It should be called
+        #  _before_ get_options_form()
+        super().auth_state_hook()
+        self.log.debug("{} auth_state_hook firing.".format(__name__))
 
     @gen.coroutine
     def get_options_form(self):
-        '''Present an LSST-tailored options form.'''
-        # Weird place to stitch up the LSST Manager, huh?
-        #  Pre-spawn start is too late, because we need the user/group
-        #  information to generate a quota which is used in options
-        #  form creation (different groups might get different forms or
-        #  defaults).  We can't do it in __init__ because getting the user
-        #  has to be in a coroutine.
-        self.log.debug("About to set LSST Manager.")
-        # set_lsst_mgr kicks off the form creation.
-        _ = yield self._set_lsst_mgr()
-        form = yield(self.asynchronize(
-            self.lsst_mgr.optionsform_mgr.get_options_form))
-        return form
+        '''Present an LSST-tailored options form; delegate to options
+        form manager.
 
-    @gen.coroutine
-    def _set_lsst_mgr(self):
+        This really is stuff that should get set from auth_state_hook...
+        But as it happens, that doesn't run until after get_options_form.
+        '''
+
         self.log.debug("Setting LSST Manager from authenticated user.")
         auth = self.user.authenticator
         lm = auth.lsst_mgr
@@ -92,17 +91,15 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         lm.user = self.user
         lm.api = self.api
         lm.rbac_api = self.rbac_api
-        _ = yield self._set_auth_state()
-        _ = yield lm.auth_mgr.parse_auth_state()  # Will throw error if no UID
-
-    @gen.coroutine
-    def _set_auth_state(self):
-        lm = self.lsst_mgr
-        user = lm.user
-        auth_state = yield user.get_auth_state()
+        om = lm.optionsform_mgr
+        auth_state = yield self.user.get_auth_state()
         if not auth_state:
-            raise ValueError("Auth state empty for user {}".format(user))
+            raise ValueError("Auth state empty for user {}".format(self.user))
         lm.auth_mgr.auth_state = auth_state
+        _ = yield self.asynchronize(lm.auth_mgr.parse_auth_state)
+        # Will throw error if no UID
+        form = yield self.asynchronize(om.get_options_form)
+        return form
 
     def set_user_namespace(self):
         '''Get namespace and store it here (for spawning) and in

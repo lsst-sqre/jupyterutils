@@ -42,10 +42,11 @@ def make_logger(name=__name__):
     '''Create a logger with a specific output format.
     '''
     logger = logging.getLogger(name)
-    fstr = '[%(levelname).1s %(asctime)s %(module)s:%(funcName)s:%(lineno)d] '
-    fstr += '%(message)s'
+    fstr = '[%(levelname).1s %(asctime)s.%(msecs).03d'
+    fstr += ' %(module)s:%(funcName)s:%(lineno)d] %(message)s'
+    dstr = '%Y-%m-%d %H:%M:%S'
     ch = logging.StreamHandler()
-    fmt = logging.Formatter(fstr)
+    fmt = logging.Formatter(fmt=fstr, datefmt=dstr)
     ch.setFormatter(fmt)
     # Remove default handlers, if any
     logger.handlers = []

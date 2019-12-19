@@ -120,7 +120,6 @@ class LSSTAuthManager(object):
         '''
         return self.pod_env
 
-    @gen.coroutine
     def parse_auth_state(self):
         '''Take the auth_state attribute and extract:
             * UID

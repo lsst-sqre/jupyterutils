@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from jupyter_client.localinterfaces import public_ips
@@ -78,6 +79,9 @@ class LSSTConfig(metaclass=Singleton):
                                        ('/opt/lsst/software/jupyterhub/' +
                                         'mounts/mountpoints.json'))
         # Hub settings for Lab spawning
+        self.lab_uid = int(os.getenv('LAB_UID', 769))
+        self.lab_gid = int(os.getenv('LAB_GID', 769))
+        self.lab_fs_gid = int(os.getenv('LAB_FS_GID', self.lab_gid))
         self.lab_default_image = (os.getenv('LAB_IMAGE') or
                                   "lsstsqre/sciplat-lab:latest")
         self.mem_limit = os.getenv('LAB_MEM_LIMIT') or '2048M'
@@ -119,8 +123,20 @@ class LSSTConfig(metaclass=Singleton):
         self.prepuller_weeklies = int(os.getenv('PREPULLER_WEEKLIES', 2))
         self.prepuller_releases = int(os.getenv('PREPULLER_RELEASES', 1))
         self.prepuller_cachefile = os.getenv('PREPULLER_CACHEFILE',
-                                             (os.getenv('HOME') +
-                                              '/repo-cache.json'))
+                                             '/tmp/repo-cache.json')
+        self.prepuller_timeout = os.getenv('PREPULLER_TIMEOUT', 3300)
+        self.prepuller_command = ["/bin/sh",
+                                  "-c",
+                                  ("echo Prepuller run for $(hostname)" +
+                                   "complete at $(date).")],
+        prp_cmd = os.getenv('PREPULLER_COMMAND_JSON')
+        if prp_cmd:
+            self.prepuller_command = json.loads(prp_cmd)
+        # Reaper settings
+        self.reaper_keep_experimentals = int(
+            os.getenv('REAPER_KEEP_EXPERIMENTALS', 10))
+        self.reaper_keep_dailies = int(os.getenv('REAPER_KEEP_DAILIES', 15))
+        self.reaper_keep_weeklies = int(os.getenv('REAPER_KEEP_WEEKLIES', 78))
         # Fileserver settings
         self.fileserver_host = (os.getenv('EXTERNAL_FILESERVER_IP') or
                                 os.getenv('FILESERVER_SERVICE_HOST'))
