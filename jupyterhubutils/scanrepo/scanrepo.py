@@ -132,9 +132,10 @@ class ScanRepo(object):
                 data = json.load(f)
         except Exception as exc:
             self.logger.error(
-                "Failed to load cachefile '{}'".format(fn))
+                "Failed to load cachefile '{}'; must rescan".format(fn))
             self.logger.error("Error: {}".format(exc))
             return
+        self.logger.debug("Loaded cachefile {}".format(fn))
         nm = self._name_to_manifest
         rm = self._results_map
         for tag in data.keys():
@@ -367,12 +368,10 @@ class ScanRepo(object):
                 # Update results map with hash
                 results[tag]["hash"] = namemap[tag]["hash"]
                 continue
+            self.logger.debug("Adding {} to check_names.".format(tag))
             check_names.append(tag)
         if not check_names:
             self.logger.debug("All images have current hash.")
-            if self.cachefile:
-                self._writecachefile()
-            # We're up to date.
             return
         baseurl = self.registry_url
         url = baseurl + "manifests/recommended"
@@ -419,7 +418,12 @@ class ScanRepo(object):
                 namemap[name]["updated"] = dt
         self._name_to_manifest.update(namemap)
         if self.cachefile:
-            self._writecachefile()
+            self.logger.debug("Writing cache file.")
+            try:
+                self._writecachefile()
+            except Exception as exc:
+                self.log.error("Failed to write cache file: {}".format(exc))
+            # We're up to date.
 
     def _writecachefile(self):
         if self.cachefile:

@@ -11,11 +11,8 @@ provide the pod spawner and the LSST-supported authentication methods
 and logic.  Convenience functions are in 'utils' and JupyterHub
 configuration convenience functions are in 'config_helpers'.
 '''
-from .prepuller import Prepuller
-from .reaper import Reaper
-from .scanrepo import ScanRepo
-from .scanrepo import SingletonScanner
 from .singleton import Singleton
+from .scanrepo import ScanRepo, SingletonScanner, Prepuller, Reaper
 from .lsstmgr import LSSTMiddleManager, check_membership
 from .spawner import LSSTSpawner
 from .authenticator.lsstcilogonauth import LSSTCILogonOAuthenticator

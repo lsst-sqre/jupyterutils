@@ -1,15 +1,12 @@
-import argparse
 import copy
 import json
 import logging
 import os
 import signal
-import sys
 import time
-from threading import Thread
-from kubernetes import client, config
-from kubernetes.config.config_exception import ConfigException
+from kubernetes import client
 from jupyterhubutils.scanrepo import ScanRepo
+from threading import Thread
 from ..utils import make_logger
 
 
@@ -19,74 +16,31 @@ class Prepuller(object):
     repo = None
     logger = None
     client = None
-    args = argparse.Namespace(debug=False,
-                              json=True,
-                              repo=None,
-                              owner="lsstsqre",
-                              name="sciplat-lab",
-                              port=None,
-                              recommended=True,
-                              dailies=3,
-                              weeklies=2,
-                              releases=1,
-                              experimentals=0,
-                              insecure=False,
-                              sort="name",
-                              list=None,
-                              command=["/bin/sh",
-                                       "-c",
-                                       "echo Prepuller run for $(hostname)" +
-                                       "complete at $(date)."],
-                              path=("/v2/repositories/lsstsqre/" +
-                                    "sciplat-lab/tags/"),
-                              no_scan=False,
-                              namespace=None,
-                              timeout=3300,
-                              uid=769
-                              )
     images = []
     nodes = []
     pod_specs = {}
     created_pods = []
+    args = None
 
     def __init__(self, args=None):
-        if args:
-            self.args = args
-        if self.args and self.args.debug:
-            self.debug = True
         self.logger = make_logger()
+        if not args:
+            raise ValueError("args must be set!")
+        self.args = args
+        if args.debug:
+            self.debug = True
         if self.debug:
             self.logger.setLevel(logging.DEBUG)
             self.logger.debug("Debug logging enabled.")
-        namespace = None
-        try:
-            config.load_incluster_config()
-            secrets = "/var/run/secrets/kubernetes.io/serviceaccount/"
-            try:
-                with open(os.path.join(secrets, "namespace"), "r") as f:
-                    namespace = f.read()
-            except OSError:
-                pass
-        except ConfigException:
-            try:
-                config.load_kube_config()
-            except Exception:
-                self.logger.critical(sys.argv[0],
-                                     " must be run from a system",
-                                     " with k8s API access.")
-                raise
-        if self.args.namespace:
-            namespace = self.args.namespace
-        if not namespace:
-            namespace = os.getenv('PREPULLER_NAMESPACE')
+        namespace = self.args.namespace
         if not namespace:
             self.logger.warning("Using kubernetes namespace 'default'")
             namespace = "default"
         self.namespace = namespace
         self.client = client.CoreV1Api()
         self.logger.debug("Arguments: %s" % str(args))
-        if self.args.command:
-            self.command = self.args.command
+        self.command = self.args.command
+        self.cachefile = self.args.cachefile
         if self.args.list:
             for image in self.args.list:
                 # Make fully-qualified image name
@@ -160,6 +114,7 @@ class Prepuller(object):
                                  recommended=self.args.recommended,
                                  json=True, insecure=self.args.insecure,
                                  sort_field=self.args.sort,
+                                 cachefile=self.cachefile,
                                  debug=self.args.debug)
         if not self.args.no_scan:
             if self.args.repo:

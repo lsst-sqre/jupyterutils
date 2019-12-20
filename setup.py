@@ -53,19 +53,18 @@ setuptools.setup(
     keywords='lsst',
     install_requires=[
         'requests>=2.0.0,<3.0.0',
-        'kubernetes>=9.0.0,<10.0.0',
+        'kubernetes>=9.0.0',
         'semver>=2.0.0,<3.0.0',
         'oauthenticator>=0.9.0,<1.0.0',
         'jupyter-client>=5.0.0,<6.0.0',
         'jupyterhub-jwtauthenticator>=0.1.0,<1.0.0',
         'jupyterhub-kubespawner>=0.10.0,<1.0.0',
-        'namespacedkubespawner>=0.0.21,<1.0.0',
         'jinja2>=2.0.0,<3.0.0'
     ],
     entry_points={
         'console_scripts': [
-            'prepuller = jupyterhubutils.prepuller:standalone',
-            'reaper = jupyterhubutils.reaper:standalone',
+            'prepuller = jupyterhubutils.scanrepo:prepullerstandalone',
+            'reaper = jupyterhubutils.scanrepo:reaperstandalone',
             'scanrepo = jupyterhubutils.scanrepo:standalone'
         ],
         'jupyterhub.authenticators': [
