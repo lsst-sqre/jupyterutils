@@ -125,10 +125,8 @@ class LSSTConfig(metaclass=Singleton):
         self.prepuller_cachefile = os.getenv('PREPULLER_CACHEFILE',
                                              '/tmp/repo-cache.json')
         self.prepuller_timeout = os.getenv('PREPULLER_TIMEOUT', 3300)
-        self.prepuller_command = ["/bin/sh",
-                                  "-c",
-                                  ("echo Prepuller run for $(hostname)" +
-                                   "complete at $(date).")],
+        cstr = "echo \"Prepuller run for $(hostname) complete at $(date).\""
+        self.prepuller_command = ["/bin/sh", "-c", cstr]
         prp_cmd = os.getenv('PREPULLER_COMMAND_JSON')
         if prp_cmd:
             self.prepuller_command = json.loads(prp_cmd)
