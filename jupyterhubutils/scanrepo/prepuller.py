@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import time
-from kubernetes import client
+from kubernetes import client, config
 from jupyterhubutils.scanrepo import ScanRepo
 from threading import Thread
 from ..utils import make_logger
@@ -37,6 +37,10 @@ class Prepuller(object):
             self.logger.warning("Using kubernetes namespace 'default'")
             namespace = "default"
         self.namespace = namespace
+        try:
+            config.load_incluster_config()
+        except config.ConfigException:
+            config.load_kube_config()
         self.client = client.CoreV1Api()
         self.logger.debug("Arguments: %s" % str(args))
         self.command = self.args.command
