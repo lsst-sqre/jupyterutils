@@ -4,8 +4,8 @@ import os
 from jupyter_client.localinterfaces import public_ips
 from urllib.parse import urlparse
 from .. import Singleton
-from ..utils import (str_bool, listify, make_logger, get_execution_namespace,
-                     sanitize_dict)
+from ..utils import (str_bool, listify, intify, floatify, make_logger,
+                     get_execution_namespace, sanitize_dict)
 
 
 class LSSTConfig(metaclass=Singleton):
@@ -62,13 +62,13 @@ class LSSTConfig(metaclass=Singleton):
                                'options_form.template.html'))
         self.form_sizelist = (listify(os.getenv('OPTIONS_FORM_SIZELIST')) or
                               ['tiny', 'small', 'medium', 'large'])
-        self.max_scan_delay = int(os.getenv('MAX_SCAN_DELAY', 300))
-        self.initial_scan_interval = float(
-            os.getenv('INITIAL_SCAN_INTERVAL', 0.2))
-        self.max_scan_interval = float(os.getenv('MAX_SCAN_INTERVAL', 5.0))
-        self.tiny_cpu = float(os.getenv('TINY_MAX_CPU', 0.5))
-        self.mb_per_cpu = int(os.getenv('MB_PER_CPU', 2048))
-        self.size_index = int(os.getenv('SIZE_INDEX', 1))
+        self.max_scan_delay = intify(os.getenv('MAX_SCAN_DELAY'), 300)
+        self.initial_scan_interval = floatify(
+            os.getenv('INITIAL_SCAN_INTERVAL'), 0.2)
+        self.max_scan_interval = floatify(os.getenv('MAX_SCAN_INTERVAL'), 5.0)
+        self.tiny_cpu = floatify(os.getenv('TINY_MAX_CPU'), 0.5)
+        self.mb_per_cpu = intify(os.getenv('MB_PER_CPU'), 2048)
+        self.size_index = intify(os.getenv('SIZE_INDEX'), 1)
         # Settings for Quota Manager
         self.resource_map = (os.getenv('RESOURCE_MAP') or
                              '/opt/lsst/software/jupyterhub/resources/' +
@@ -79,9 +79,9 @@ class LSSTConfig(metaclass=Singleton):
                                        ('/opt/lsst/software/jupyterhub/' +
                                         'mounts/mountpoints.json'))
         # Hub settings for Lab spawning
-        self.lab_uid = int(os.getenv('LAB_UID', 769))
-        self.lab_gid = int(os.getenv('LAB_GID', 769))
-        self.lab_fs_gid = int(os.getenv('LAB_FS_GID', self.lab_gid))
+        self.lab_uid = intify(os.getenv('LAB_UID'), 769)
+        self.lab_gid = intify(os.getenv('LAB_GID'), 769)
+        self.lab_fs_gid = intify(os.getenv('LAB_FS_GID'), self.lab_gid)
         self.lab_default_image = (os.getenv('LAB_IMAGE') or
                                   "lsstsqre/sciplat-lab:latest")
         self.mem_limit = os.getenv('LAB_MEM_LIMIT') or '2048M'
@@ -117,26 +117,26 @@ class LSSTConfig(metaclass=Singleton):
         self.lab_repo_host = os.getenv('LAB_REPO_HOST') or 'hub.docker.com'
         self.prepuller_namespace = (os.getenv('PREPULLER_NAMESPACE') or
                                     get_execution_namespace())
-        self.prepuller_experimentals = int(
-            os.getenv('PREPULLER_EXPERIMENTALS', 0))
-        self.prepuller_dailies = int(os.getenv('PREPULLER_DAILIES', 3))
-        self.prepuller_weeklies = int(os.getenv('PREPULLER_WEEKLIES', 2))
-        self.prepuller_releases = int(os.getenv('PREPULLER_RELEASES', 1))
+        self.prepuller_experimentals = intify(
+            os.getenv('PREPULLER_EXPERIMENTALS'), 0)
+        self.prepuller_dailies = intify(os.getenv('PREPULLER_DAILIES'), 3)
+        self.prepuller_weeklies = intify(os.getenv('PREPULLER_WEEKLIES'), 2)
+        self.prepuller_releases = intify(os.getenv('PREPULLER_RELEASES'), 1)
         self.prepuller_cachefile = os.getenv('PREPULLER_CACHEFILE',
                                              '/tmp/repo-cache.json')
         self.prepuller_timeout = os.getenv('PREPULLER_TIMEOUT', 3300)
-        self.prepuller_command = ["/bin/sh",
-                                  "-c",
-                                  ("echo Prepuller run for $(hostname)" +
-                                   "complete at $(date).")],
+        cstr = "echo \"Prepuller run for $(hostname) complete at $(date).\""
+        self.prepuller_command = ["/bin/sh", "-c", cstr]
         prp_cmd = os.getenv('PREPULLER_COMMAND_JSON')
         if prp_cmd:
             self.prepuller_command = json.loads(prp_cmd)
         # Reaper settings
-        self.reaper_keep_experimentals = int(
-            os.getenv('REAPER_KEEP_EXPERIMENTALS', 10))
-        self.reaper_keep_dailies = int(os.getenv('REAPER_KEEP_DAILIES', 15))
-        self.reaper_keep_weeklies = int(os.getenv('REAPER_KEEP_WEEKLIES', 78))
+        self.reaper_keep_experimentals = intify(
+            os.getenv('REAPER_KEEP_EXPERIMENTALS'), 10)
+        self.reaper_keep_dailies = intify(
+            os.getenv('REAPER_KEEP_DAILIES'), 15)
+        self.reaper_keep_weeklies = intify(
+            os.getenv('REAPER_KEEP_WEEKLIES'), 78)
         # Fileserver settings
         self.fileserver_host = (os.getenv('EXTERNAL_FILESERVER_IP') or
                                 os.getenv('FILESERVER_SERVICE_HOST'))

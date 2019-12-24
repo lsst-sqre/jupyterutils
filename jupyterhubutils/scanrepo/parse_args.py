@@ -98,8 +98,8 @@ def parse_args(cfg=LSSTConfig(),
         parser.add_argument("--command",
                             help=("JSON representation of command to run " +
                                   "when image is run as prepuller " +
-                                  "[{}]".format(json.dumps(cmd))),
-                            default=json.dumps(cmd))
+                                  "[{}]".format(str(cmd))),
+                            default=cmd)
         parser.add_argument("-t", "--timeout",
                             help=("Seconds allowed for process to complete " +
                                   "(-1 for no timeout) [{}]".format(pto)),

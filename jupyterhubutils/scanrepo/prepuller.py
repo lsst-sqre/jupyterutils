@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import time
-from kubernetes import client
+from kubernetes import client, config
 from jupyterhubutils.scanrepo import ScanRepo
 from threading import Thread
 from ..utils import make_logger
@@ -37,6 +37,10 @@ class Prepuller(object):
             self.logger.warning("Using kubernetes namespace 'default'")
             namespace = "default"
         self.namespace = namespace
+        try:
+            config.load_incluster_config()
+        except config.ConfigException:
+            config.load_kube_config()
         self.client = client.CoreV1Api()
         self.logger.debug("Arguments: %s" % str(args))
         self.command = self.args.command
@@ -145,7 +149,13 @@ class Prepuller(object):
                     if self.args.repo:
                         exhost = self.args.repo
                         if self.args.port:
-                            exhost += ":" + self.args.port + "/"
+                            exhost += ":" + self.args.port
+                    if exhost == "hub.docker.com":
+                        # We could change it to "index.docker.io" but
+                        #  leaving it empty works too.
+                        exhost = ""
+                    if exhost and exhost[-1] != "/":
+                        exhost += "/"
                     scan_imgs.append(exhost + self.args.owner + "/" +
                                      self.args.name + ":" +
                                      entry["name"])

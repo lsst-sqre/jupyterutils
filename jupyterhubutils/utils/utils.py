@@ -97,6 +97,26 @@ def listify(item, delimiter=','):
     return item
 
 
+def floatify(item, default=0.0):
+    '''Another environment-parser: the empty string should be treated as
+    None, and return the default, rather than the empty string (which
+    does not become an integer).  Default can be either a float or string
+    that float() works on.  Note that numeric zero (or string '0') returns
+    0.0, not the default.  This is intentional.
+    '''
+    if item is None:
+        return default
+    if item == '':
+        return default
+    return float(item)
+
+
+def intify(item, default=0):
+    '''floatify, but for ints.
+    '''
+    return int(floatify(item, default))
+
+
 def list_duplicates(seq):
     '''List duplicate items from a sequence.
     '''
