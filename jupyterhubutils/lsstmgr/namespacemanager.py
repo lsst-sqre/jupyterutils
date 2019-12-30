@@ -37,7 +37,9 @@ class LSSTNamespaceManager(object):
         api = self.parent.api
         cfg = self.parent.config
         ns = client.V1Namespace(
-            metadata=client.V1ObjectMeta(name=namespace))
+            metadata=client.V1ObjectMeta(
+                name=namespace,
+                labels={'argocd.argoproj.io/instance': 'nublado-users'}))
         try:
             self.log.info("Attempting to create namespace '%s'" % namespace)
             api.create_namespace(ns)
@@ -92,7 +94,9 @@ class LSSTNamespaceManager(object):
         username = self.parent.user.escaped_name
         account = "{}-{}".format(username, "dask")
         self.service_account = account
-        md = client.V1ObjectMeta(name=account)
+        md = client.V1ObjectMeta(
+            name=account,
+            labels={'argocd.argoproj.io/instance': 'nublado-users'})
         svcacct = client.V1ServiceAccount(metadata=md)
         rules = [
             client.V1PolicyRule(

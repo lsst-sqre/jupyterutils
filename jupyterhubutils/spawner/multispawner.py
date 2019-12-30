@@ -7,8 +7,9 @@ implementation that should be used by JupyterHub.
 '''
 
 from jupyterhub.utils import exponential_backoff
-from kubernetes import client
+from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+from kubernetes.config.config_exception import ConfigException
 from kubespawner import KubeSpawner
 from kubespawner.clients import shared_client
 from tornado import gen
@@ -34,6 +35,11 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         selected_pod_reflector_classref = MultiNamespacePodReflector
         selected_event_reflector_classref = EventReflector
         self.namespace = self.get_user_namespace()
+        try:
+            self.log.debug("Loading K8s config.")
+            config.load_incluster_config()
+        except ConfigException:
+            config.load_kube_config()
 
         main_loop = IOLoop.current()
 
