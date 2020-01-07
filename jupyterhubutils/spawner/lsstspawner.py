@@ -214,6 +214,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             size = self.user_options.get('size')
             if size:
                 image_size = om.sizemap[size]
+                self.log.debug("Image size: {}".format(
+                    json.dumps(image_size, sort_keys=True, indent=4)))
             colon = image.find(':')
             if colon > -1:
                 imgname = image[:colon]
@@ -266,6 +268,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             cpu_guar = float(image_size["cpu"] / size_range)
         self.mem_guarantee = mem_guar
         self.cpu_guarantee = cpu_guar
+        pod_env['MEM_GUARANTEE'] = str(mem_guar) + "M"
+        pod_env['MEM_LIMIT'] = mem_limit
+        pod_env['CPU_GUARANTEE'] = str(cpu_guar)
+        pod_env['CPU_LIMIT'] = str(cpu_limit)
         # We don't care about the image name anymore: the user pod will
         #  be named "nb" plus the username and tag, to keep the pod name
         #  short.
