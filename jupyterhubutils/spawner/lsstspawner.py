@@ -234,6 +234,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                                    "from drop-down list.")
                     cit = self.user_options.get('image_tag')
                     if cit:
+                        tag = cit
                         image = imgname + ":" + cit
             self.log.debug("Replacing image from options form: %s" % image)
             self.image = image
