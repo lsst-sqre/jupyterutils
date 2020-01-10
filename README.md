@@ -1,1 +1,1 @@
-# Utilities for SQuaRE Jupyter Server Environment
+# Utilities for LSST LSP notebook environment (Hub/spawner side)
