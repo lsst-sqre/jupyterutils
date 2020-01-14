@@ -63,13 +63,15 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         #  initialization loop
         self.log.debug("MultiNamespaceSpawner initialized.")
 
-    def auth_state_hook(self, auth_state):
+    def auth_state_hook(self, spawner, auth_state):
         # Start the watchers.
         # Restart pod/event watcher
         self.log.debug("{} auth_state_hook firing.".format(__name__))
         self._start_watching_pods(replace=True)
         if self.events_enabled:
             self._start_watching_events(replace=True)
+        if super().auth_state_hook is not None:
+            super().auth_state_hook(spawner, auth_state)
 
     @gen.coroutine
     def poll(self):

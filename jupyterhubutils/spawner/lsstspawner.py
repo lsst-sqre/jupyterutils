@@ -68,10 +68,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # self.log.debug("Spawner: {}".format(json.dumps(self.dump())))
         self.log.debug("Initialized {}".format(__name__))
 
-    def auth_state_hook(self, auth_state):
+    def auth_state_hook(self, spawner, auth_state):
         # Turns out this is in the wrong place.  It should be called
         #  _before_ get_options_form()
-        super().auth_state_hook(auth_state)
+        super().auth_state_hook(spawner, auth_state)
         self.log.debug("{} auth_state_hook firing.".format(__name__))
 
     @gen.coroutine
