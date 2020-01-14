@@ -55,6 +55,8 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         )
         self.log.debug("Created new pod reflector: " +
                        "%r" % self.__class__.pod_reflector)
+        self._start_watching_pods(replace=True)
+
         # And event_reflector
         self.__class__.event_reflector = selected_event_reflector_classref(
             parent=self, namespace=self.namespace)
@@ -67,11 +69,9 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         # Start the watchers.
         # Restart pod/event watcher
         self.log.debug("{} auth_state_hook firing.".format(__name__))
-        self._start_watching_pods(replace=True)
         if self.events_enabled:
             self._start_watching_events(replace=True)
-        if super().auth_state_hook is not None:
-            super().auth_state_hook(spawner, auth_state)
+        # Do not call superclass
 
     @gen.coroutine
     def poll(self):
