@@ -7,8 +7,9 @@ implementation that should be used by JupyterHub.
 '''
 
 from jupyterhub.utils import exponential_backoff
-from kubernetes import client
+from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+from kubernetes.config.config_exception import ConfigException
 from kubespawner import KubeSpawner
 from kubespawner.clients import shared_client
 from tornado import gen
@@ -22,6 +23,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
     with per-user namespaces.
     '''
 
+    delete_grace_period = 3  # 30 seconds is ridiculous
     rbac_api = None  # We need an RBAC client
 
     def __init__(self, *args, **kwargs):
@@ -34,6 +36,11 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         selected_pod_reflector_classref = MultiNamespacePodReflector
         selected_event_reflector_classref = EventReflector
         self.namespace = self.get_user_namespace()
+        try:
+            self.log.debug("Loading K8s config.")
+            config.load_incluster_config()
+        except ConfigException:
+            config.load_kube_config()
 
         main_loop = IOLoop.current()
 
@@ -48,6 +55,8 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         )
         self.log.debug("Created new pod reflector: " +
                        "%r" % self.__class__.pod_reflector)
+        self._start_watching_pods(replace=True)
+
         # And event_reflector
         self.__class__.event_reflector = selected_event_reflector_classref(
             parent=self, namespace=self.namespace)
@@ -56,13 +65,13 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         #  initialization loop
         self.log.debug("MultiNamespaceSpawner initialized.")
 
-    def auth_state_hook(self, auth_state):
+    def auth_state_hook(self, spawner, auth_state):
         # Start the watchers.
         # Restart pod/event watcher
         self.log.debug("{} auth_state_hook firing.".format(__name__))
-        self._start_watching_pods(replace=True)
         if self.events_enabled:
             self._start_watching_events(replace=True)
+        # Do not call superclass
 
     @gen.coroutine
     def poll(self):
@@ -128,7 +137,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
                 self.log.info(
                     'Found existing pod %s, attempting to kill', self.pod_name)
                 # TODO: this should show up in events
-                yield self.stop(True)
+                yield self.stop(now=True)
 
                 self.log.info(
                     'Killed pod %s, will try starting ' % self.pod_name +
@@ -187,8 +196,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
             grace_seconds = 0
         else:
             # Give it some time, but not the default (which is 30s!)
-            # FIXME: Move this into pod creation maybe?
-            grace_seconds = 1
+            grace_seconds = self.delete_grace_period
 
         delete_options.grace_period_seconds = grace_seconds
         self.log.info("Deleting pod %s", self.pod_name)

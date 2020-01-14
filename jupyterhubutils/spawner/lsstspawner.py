@@ -68,10 +68,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # self.log.debug("Spawner: {}".format(json.dumps(self.dump())))
         self.log.debug("Initialized {}".format(__name__))
 
-    def auth_state_hook(self, auth_state):
+    def auth_state_hook(self, spawner, auth_state):
         # Turns out this is in the wrong place.  It should be called
         #  _before_ get_options_form()
-        super().auth_state_hook()
+        super().auth_state_hook(spawner, auth_state)
         self.log.debug("{} auth_state_hook firing.".format(__name__))
 
     @gen.coroutine
@@ -162,6 +162,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             cmd = ctrs[0].args or ctrs[0].command
         # That should be it from the standard get_pod_manifest
         # Now we finally need all that data we have been managing.
+        # Add label for ArgoCD management.
+        labels['argocd.argoproj.io/instance'] = 'nublado-users'
         cfg = self.lsst_mgr.config
         em = self.lsst_mgr.env_mgr
         am = self.lsst_mgr.auth_mgr
