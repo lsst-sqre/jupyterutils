@@ -24,7 +24,9 @@ class LSSTAuthenticator(Authenticator):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.lsst_mgr = LSSTMiddleManager(parent=self, config=LSSTConfig())
+        self.lsst_mgr = LSSTMiddleManager(parent=self,
+                                          authenticator=self,
+                                          config=LSSTConfig())
 
     def resolve_cilogon(self, membership):
         '''Shared between CILogon and JWT (which uses CILogon as its backing

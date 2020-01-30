@@ -2,6 +2,7 @@
 Shared utility functions.
 '''
 
+import hashlib
 import logging
 import os
 
@@ -126,3 +127,12 @@ def list_duplicates(seq):
         tally[item].append(i)
     return ((key, locs) for key, locs in tally.items()
             if len(locs) > 1)
+
+
+def list_digest(inp_list):
+    if type(inp_list) is not list:
+        raise TypeError("list_digest only works on lists!")
+    if not inp_list:
+        raise ValueError("input must be a non-empty list!")
+    # If we can rely on python >= 3.8, shlex.join is better
+    return hashlib.sha256(' '.join(inp_list).encode('utf-8')).hexdigest()

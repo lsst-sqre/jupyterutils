@@ -1,7 +1,8 @@
-from ..utils import make_logger, str_true, sanitize_dict
+from ..utils import str_true, sanitize_dict
+from .. import LoggableChild
 
 
-class LSSTEnvironmentManager(object):
+class LSSTEnvironmentManager(LoggableChild):
     '''Class to hold LSST-specific, but not user-specific, environment.
     The user- specific pieces (from the volume manager and the quota
     manager) will be injected at spawn time.
@@ -9,11 +10,6 @@ class LSSTEnvironmentManager(object):
     The environment should be regarded as immutable after creation.
     '''
     pod_env = {}
-
-    def __init__(self, *args, **kwargs):
-        self.log = make_logger()
-        self.log.debug("Creating LSSTEnvironmentManager")
-        self.parent = kwargs.pop('parent')
 
     def create_pod_env(self):
         '''Return a dict mapping string to string for injection into the

@@ -4,20 +4,16 @@
 import time
 from kubernetes.client.rest import ApiException
 from kubernetes import client
+from .. import LoggableChild
 
-from ..utils import make_logger
 
-
-class LSSTNamespaceManager(object):
+class LSSTNamespaceManager(LoggableChild):
     '''Class to provide namespace manipulation.
     '''
+    parent = None
+    log = None
     namespace = None
     service_account = None  # Account for pod to run as
-
-    def __init__(self, *args, **kwargs):
-        self.log = make_logger()
-        self.log.debug("Creating LSSTNamespaceManager")
-        self.parent = kwargs.pop('parent')
 
     def set_namespace(self, namespace):
         self.namespace = namespace

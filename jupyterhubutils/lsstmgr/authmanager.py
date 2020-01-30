@@ -4,8 +4,8 @@ manipulation, designed for doing things with user group membership.
 '''
 
 import random
-from tornado import gen
-from ..utils import make_logger, list_duplicates, sanitize_dict
+from .. import LoggableChild
+from ..utils import list_duplicates, sanitize_dict
 
 
 def check_membership(groups, allowed, forbidden, log=None):
@@ -72,7 +72,7 @@ def deduplicate_groups(grps):
     return grps
 
 
-class LSSTAuthManager(object):
+class LSSTAuthManager(LoggableChild):
     '''Class to hold LSST-specific authentication/authorization details
     and methods.
 
@@ -86,9 +86,7 @@ class LSSTAuthManager(object):
     pod_env = {}
 
     def __init__(self, *args, **kwargs):
-        self.log = make_logger()
-        self.log.debug("Creating LSSTAuthManager.")
-        self.parent = kwargs.pop('parent')
+        super().__init__(*args, **kwargs)
         self.authenticator = self.parent.authenticator
 
     def get_fake_gid(self):
