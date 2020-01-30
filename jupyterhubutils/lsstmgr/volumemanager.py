@@ -3,20 +3,15 @@ import json
 import os
 import yaml
 from kubernetes import client
-from ..utils import make_logger
+from .. import LoggableChild
 
 
-class LSSTVolumeManager(object):
+class LSSTVolumeManager(LoggableChild):
     '''Class to provide support for document-driven Volume assignment.
     '''
     volume_list = []
     k8s_volumes = []
     k8s_vol_mts = []
-
-    def __init__(self, *args, **kwargs):
-        self.log = make_logger()
-        self.log.debug("Creating LSSTVolumeManager")
-        self.parent = kwargs.pop('parent')
 
     def make_volumes_from_config(self):
         '''Create volume definition representation from document.

@@ -3,21 +3,15 @@ import os
 from kubernetes.client import V1ResourceQuotaSpec
 from kubernetes.client.rest import ApiException
 from kubernetes import client
+from .. import LoggableChild
 
-from ..utils import make_logger
 
-
-class LSSTQuotaManager(object):
+class LSSTQuotaManager(LoggableChild):
     '''Quota support for LSST LSP Jupyterlab and Dask pods.
     '''
     quota = {}
     custom_resources = {}
     resourcemap = None
-
-    def __init__(self, *args, **kwargs):
-        self.log = make_logger()
-        self.log.debug("Creating LSSTQuotaManager")
-        self.parent = kwargs.pop('parent')
 
     def define_resource_quota_spec(self):
         '''We're going to return a resource quota spec that checks whether we
