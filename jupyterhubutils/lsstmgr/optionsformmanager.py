@@ -6,21 +6,15 @@ import json
 from collections import OrderedDict
 from time import sleep
 from .. import SingletonScanner
-from ..utils import make_logger
+from .. import LoggableChild
 
 
-class LSSTOptionsFormManager(object):
+class LSSTOptionsFormManager(LoggableChild):
     '''Class to create and read a spawner form.
     '''
-
     sizemap = {}
     _scanner = None
     options_form_data = None
-
-    def __init__(self, *args, **kwargs):
-        self.log = make_logger()
-        self.log.debug("Creating LSSTOptionsFormManager")
-        self.parent = kwargs.pop('parent')
 
     def get_options_form(self):
         '''Create an LSST Options Form from parent's config object.

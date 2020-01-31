@@ -14,6 +14,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     LSST-specific parts of our spawning requirements.
     '''
     lsst_mgr = None
+    wf_api = None
     delete_grace_period = 5
     # In our LSST setup, there is a "provisionator" user, uid/gid 769,
     #  that is who we should start as.
@@ -89,8 +90,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         self.lsst_mgr = lm
         lm.spawner = self
         lm.user = self.user
-        lm.api = self.api
-        lm.rbac_api = self.rbac_api
+        # Take the APIs from the api_manager
+        self.api = lm.api_mgr.api
+        self.rbac_api = lm.api_mgr.rbac_api
+        self.wf_api = lm.api_mgr.wf_api
         om = lm.optionsform_mgr
         auth_state = yield self.user.get_auth_state()
         if not auth_state:

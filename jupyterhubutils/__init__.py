@@ -12,6 +12,7 @@ and logic.  Convenience functions are in 'utils' and JupyterHub
 configuration convenience functions are in 'config_helpers'.
 '''
 from .singleton import Singleton
+from .loggable import Loggable, LoggableChild
 from .scanrepo import ScanRepo, SingletonScanner, Prepuller, Reaper
 from .lsstmgr import LSSTMiddleManager, check_membership
 from .spawner import LSSTSpawner
@@ -20,7 +21,7 @@ from .authenticator.lsstgithubauth import LSSTGitHubOAuthenticator
 from .authenticator.lsstjwtauth import LSSTJWTAuthenticator
 from .utils import (rreplace, sanitize_dict, get_execution_namespace,
                     make_logger, str_bool, str_true, listify, intify,
-                    floatify, list_duplicates)
+                    floatify, list_duplicates, list_digest)
 from .config import LSSTConfig
 from .setup_auth import configure_auth_and_spawner
 from ._version import __version__
@@ -30,5 +31,6 @@ __all__ = [LSSTMiddleManager, check_membership, Prepuller, Reaper,
            LSSTCILogonOAuthenticator, LSSTGitHubOAuthenticator,
            LSSTJWTAuthenticator, rreplace, sanitize_dict,
            get_execution_namespace, make_logger, str_bool, str_true,
-           listify, intify, floatify, list_duplicates, LSSTConfig,
-           configure_auth_and_spawner, __version__]
+           listify, intify, floatify, list_duplicates, list_digest,
+           LSSTConfig, configure_auth_and_spawner, Loggable, LoggableChild,
+           __version__]

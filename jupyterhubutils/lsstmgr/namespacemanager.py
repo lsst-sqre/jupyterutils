@@ -4,20 +4,16 @@
 import time
 from kubernetes.client.rest import ApiException
 from kubernetes import client
+from .. import LoggableChild
 
-from ..utils import make_logger
 
-
-class LSSTNamespaceManager(object):
+class LSSTNamespaceManager(LoggableChild):
     '''Class to provide namespace manipulation.
     '''
+    parent = None
+    log = None
     namespace = None
     service_account = None  # Account for pod to run as
-
-    def __init__(self, *args, **kwargs):
-        self.log = make_logger()
-        self.log.debug("Creating LSSTNamespaceManager")
-        self.parent = kwargs.pop('parent')
 
     def set_namespace(self, namespace):
         self.namespace = namespace
@@ -65,31 +61,6 @@ class LSSTNamespaceManager(object):
         self.log.debug("Namespace resources ensured.")
 
     def _define_namespaced_account_objects(self):
-        # We may want these when and if we move Argo workflows into the
-        #  deployment.
-        #
-        #    client.V1PolicyRule(
-        #        api_groups=["argoproj.io"],
-        #        resources=["workflows", "workflows/finalizers"],
-        #        verbs=["get", "list", "watch", "update", "patch", "delete"]
-        #    ),
-        #    client.V1PolicyRule(
-        #        api_groups=["argoproj.io"],
-        #        resources=["workflowtemplates",
-        #                   "workflowtemplates/finalizers"],
-        #        verbs=["get", "list", "watch"],
-        #    ),
-        #
-        #    client.V1PolicyRule(
-        #        api_groups=[""],
-        #        resources=["secrets"],
-        #        verbs=["get"]
-        #    ),
-        #    client.V1PolicyRule(
-        #        api_groups=[""],
-        #        resources=["configmaps"],
-        #        verbs=["list"]
-        #    ),
         namespace = self.namespace
         username = self.parent.user.escaped_name
         account = "{}-{}".format(username, "dask")
@@ -101,13 +72,29 @@ class LSSTNamespaceManager(object):
         rules = [
             client.V1PolicyRule(
                 api_groups=[""],
-                resources=["pods", "services"],
+                resources=["pods", "services", "configmaps"],
                 verbs=["get", "list", "watch", "create", "delete"]
+            ),
+            client.V1PolicyRule(
+                api_groups=[""],
+                resources=["secrets"],
+                verbs=["get"]
             ),
             client.V1PolicyRule(
                 api_groups=[""],
                 resources=["pods/log", "serviceaccounts"],
                 verbs=["get", "list"]
+            ),
+            client.V1PolicyRule(
+                api_groups=["argoproj.io"],
+                resources=["workflows", "workflows/finalizers"],
+                verbs=["get", "list", "watch", "update", "patch", "delete"]
+            ),
+            client.V1PolicyRule(
+                api_groups=["argoproj.io"],
+                resources=["workflowtemplates",
+                           "workflowtemplates/finalizers"],
+                verbs=["get", "list", "watch"],
             ),
         ]
         role = client.V1Role(
@@ -123,7 +110,6 @@ class LSSTNamespaceManager(object):
                 name=account,
                 namespace=namespace)]
         )
-
         return svcacct, role, rolebinding
 
     def _ensure_namespaced_service_account(self):
