@@ -104,11 +104,11 @@ class LSSTConfig(metaclass=Singleton):
         self.tap_route = os.getenv('TAP_ROUTE') or '/api/tap'
         self.soda_route = os.getenv('SODA_ROUTE') or '/api/image/soda'
         self.workflow_route = os.getenv('WORKFLOW_ROUTE') or '/workflow'
-        self.external_firefly_route = os.getenv('EXTERNAL_FIREFLY_ROUTE')
-        self.external_js9_route = os.getenv('EXTERNAL_JS9_ROUTE')
-        self.external_api_route = os.getenv('EXTERNAL_API_ROUTE')
-        self.external_tap_route = os.getenv('EXTERNAL_TAP_ROUTE')
-        self.external_soda_route = os.getenv('EXTERNAL_SODA_ROUTE')
+        self.external_firefly_url = os.getenv('EXTERNAL_FIREFLY_URL')
+        self.external_js9_url = os.getenv('EXTERNAL_JS9_URL')
+        self.external_api_url = os.getenv('EXTERNAL_API_URL')
+        self.external_tap_url = os.getenv('EXTERNAL_TAP_URL')
+        self.external_soda_url = os.getenv('EXTERNAL_SODA_URL')
         self.external_workflow_route = os.getenv('EXTERNAL_WORKFLOW_ROUTE')
         self.auto_repo_urls = os.getenv('AUTO_REPO_URLS')
         # Prepuller settings

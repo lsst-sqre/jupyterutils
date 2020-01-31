@@ -42,11 +42,11 @@ class LSSTEnvironmentManager(LoggableChild):
         env['TAP_ROUTE'] = cfg.tap_route
         env['SODA_ROUTE'] = cfg.soda_route
         env['WORKFLOW_ROUTE'] = cfg.workflow_route
-        env['EXTERNAL_FIREFLY_ROUTE'] = cfg.external_firefly_route
-        env['EXTERNAL_JS9_ROUTE'] = cfg.external_js9_route
-        env['EXTERNAL_API_ROUTE'] = cfg.external_api_route
-        env['EXTERNAL_TAP_ROUTE'] = cfg.external_tap_route
-        env['EXTERNAL_SODA_ROUTE'] = cfg.external_soda_route
+        env['EXTERNAL_FIREFLY_URL'] = cfg.external_firefly_url
+        env['EXTERNAL_JS9_URL'] = cfg.external_js9_url
+        env['EXTERNAL_API_URL'] = cfg.external_api_url
+        env['EXTERNAL_TAP_URL'] = cfg.external_tap_url
+        env['EXTERNAL_SODA_URL'] = cfg.external_soda_url
         env['EXTERNAL_WORKFLOW_ROUTE'] = cfg.external_workflow_route
         env['AUTO_REPO_URLS'] = cfg.auto_repo_urls
         # Now clean up the env hash by removing any keys with empty values
