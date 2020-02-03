@@ -112,7 +112,7 @@ class LSSTWorkflowManager(LoggableChild):
             data['image'].split(':')[-1].replace('_', '-'),
             data['command'][0].split('/')[-1].replace('_', '-'))
         wf_input['name'] = cname
-        env['JUPYTERHUB_USER'] = cname
+        env['JUPYTERHUB_USER'] = user.escaped_name
         env['NONINTERACTIVE'] = "TRUE"
         env['EXTERNAL_UID'] = str(user.auth_state['uid'])
         env['EXTERNAL_GROUPS'] = am.get_group_string()
