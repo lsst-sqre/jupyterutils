@@ -119,6 +119,7 @@ class LSSTWorkflowManager(LoggableChild):
         env['DEBUG'] = str_true(cfg.debug)
         e_l = self._d2l(env)
         wf_input['env'] = e_l
+        wf_input['username'] = user.escaped_name
         # Volumes and mounts aren't JSON-serializable...
         wf_input['vols'] = '{}'.format(vols)
         wf_input['vmts'] = '{}'.format(vmts)
@@ -129,7 +130,6 @@ class LSSTWorkflowManager(LoggableChild):
         wf_input['vols'] = vols
         wf_input['vmts'] = vmts
         self.wf_input = wf_input
-
         wf = LSSTWorkflow(parms=wf_input)
         self.log.debug("Workflow: {}".format(wf))
         self.workflow = wf
@@ -196,118 +196,7 @@ class LSSTWorkflowManager(LoggableChild):
         self.define_workflow(data)
         nm = self.parent.namespace_mgr
         nm.ensure_namespace()
-        self._ensure_namespaced_account_objects()
-        self.create_workflow()
-
-    def _ensure_namespaced_account_objects(self):
-        # Create a service account with role and rolebinding to allow it
-        #  to manipulate pods in the namespace.
-        self.log.info("Ensuring namespaced service account.")
-        namespace = self.parent.namespace_mgr.namespace
-        api = self.parent.api
-        rbac_api = self.parent.rbac_api
-        svcacct, role, rolebinding = self._define_namespaced_account_objects()
-        account = self.service_account
-        try:
-            self.log.info("Attempting to create service account.")
-            api.create_namespaced_service_account(
-                namespace=namespace,
-                body=svcacct)
-        except ApiException as e:
-            if e.status != 409:
-                self.log.exception("Create service account '%s' " % account +
-                                   "in namespace '%s' " % namespace +
-                                   "failed: %s" % str(e))
-                raise
-            else:
-                self.log.info("Service account '%s' " % account +
-                              "in namespace '%s' already exists." % namespace)
-        try:
-            self.log.info("Attempting to create role in namespace.")
-            rbac_api.create_namespaced_role(
-                namespace,
-                role)
-        except ApiException as e:
-            if e.status != 409:
-                self.log.exception("Create role '%s' " % account +
-                                   "in namespace '%s' " % namespace +
-                                   "failed: %s" % str(e))
-                raise
-            else:
-                self.log.info("Role '%s' " % account +
-                              "already exists in namespace '%s'." % namespace)
-        try:
-            self.log.info("Attempting to create rolebinding in namespace.")
-            rbac_api.create_namespaced_role_binding(
-                namespace,
-                rolebinding)
-        except ApiException as e:
-            if e.status != 409:
-                self.log.exception("Create rolebinding '%s'" % account +
-                                   "in namespace '%s' " % namespace +
-                                   "failed: %s", str(e))
-                raise
-            else:
-                self.log.info("Rolebinding '%s' " % account +
-                              "already exists in '%s'." % namespace)
-
-    def _define_namespaced_account_objects(self):
-        namespace = self.parent.namespace_mgr.namespace
-        username = self.parent.parent.auth.user.escaped_name
-        account = "{}-{}".format(username, "argo")
-        self.service_account = account
-        md = client.V1ObjectMeta(
-            name=account,
-            labels={'argocd.argoproj.io/instance': 'nublado-users'})
-        svcacct = client.V1ServiceAccount(metadata=md)
-        rules = [
-            client.V1PolicyRule(
-                api_groups=["argoproj.io"],
-                resources=["workflows", "workflows/finalizers"],
-                verbs=["get", "list", "watch", "update", "patch", "delete"]
-            ),
-            client.V1PolicyRule(
-                api_groups=["argoproj.io"],
-                resources=["workflowtemplates",
-                           "workflowtemplates/finalizers"],
-                verbs=["get", "list", "watch"],
-            ),
-
-            client.V1PolicyRule(
-                api_groups=[""],
-                resources=["secrets"],
-                verbs=["get"]
-            ),
-            client.V1PolicyRule(
-                api_groups=[""],
-                resources=["configmaps"],
-                verbs=["list"]
-            ),
-            client.V1PolicyRule(
-                api_groups=[""],
-                resources=["pods", "services"],
-                verbs=["get", "list", "watch", "create", "delete"]
-            ),
-            client.V1PolicyRule(
-                api_groups=[""],
-                resources=["pods/log", "serviceaccounts"],
-                verbs=["get", "list"]
-            ),
-        ]
-        role = client.V1Role(
-            rules=rules,
-            metadata=md)
-        rolebinding = client.V1RoleBinding(
-            metadata=md,
-            role_ref=client.V1RoleRef(api_group="rbac.authorization.k8s.io",
-                                      kind="Role",
-                                      name=account),
-            subjects=[client.V1Subject(
-                kind="ServiceAccount",
-                name=account,
-                namespace=namespace)]
-        )
-        return svcacct, role, rolebinding
+        nm.ensure_namespaced_account_objects()
 
     def delete_workflow(self, wfid):
         namespace = self.parent.namespace_mgr.namespace
@@ -336,6 +225,8 @@ class LSSTWorkflowManager(LoggableChild):
 class LSSTWorkflow(Workflow):
     parms = {}
     entrypoint = "noninteractive"
+    run_as_user = 769
+    run_as_group = 769
 
     def __init__(self, *args, **kwargs):
         self.parms = kwargs.pop('parms')
@@ -362,8 +253,8 @@ class LSSTWorkflow(Workflow):
                 requests={"memory": "{}M".format(self.parms['mem_guar']),
                           "cpu": "{}".format(self.parms['cpu_guar'])}),
             security_context=V1SecurityContext(
-                run_as_group=769,
-                run_as_user=769,
+                run_as_group=self.run_as_group,
+                run_as_user=self.run_as_user,
             )
         )
         self.volumes = self.parms['vols']
@@ -371,5 +262,6 @@ class LSSTWorkflow(Workflow):
         self.metadata.labels = lbl
         self.metadata.generate_name = self.parms['name'] + '-'
         self.metadata.name = None
+        self.service_account_name = self.parms['username'] + '-svcacct'
 
         return container
