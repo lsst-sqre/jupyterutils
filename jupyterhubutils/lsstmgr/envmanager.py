@@ -47,7 +47,7 @@ class LSSTEnvironmentManager(LoggableChild):
         env['EXTERNAL_API_URL'] = cfg.external_api_url
         env['EXTERNAL_TAP_URL'] = cfg.external_tap_url
         env['EXTERNAL_SODA_URL'] = cfg.external_soda_url
-        env['EXTERNAL_WORKFLOW_ROUTE'] = cfg.external_workflow_route
+        env['EXTERNAL_WORKFLOW_URL'] = cfg.external_workflow_url
         env['AUTO_REPO_URLS'] = cfg.auto_repo_urls
         # Now clean up the env hash by removing any keys with empty values
         cleaned = self._clean_env(env)
