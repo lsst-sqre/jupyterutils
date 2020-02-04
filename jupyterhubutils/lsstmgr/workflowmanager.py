@@ -196,7 +196,7 @@ class LSSTWorkflowManager(LoggableChild):
         self.define_workflow(data)
         nm = self.parent.namespace_mgr
         nm.ensure_namespace()
-        nm.ensure_namespaced_account_objects()
+        nm.ensure_namespaced_service_account()
 
     def delete_workflow(self, wfid):
         namespace = self.parent.namespace_mgr.namespace
