@@ -97,7 +97,7 @@ class LSSTNamespaceManager(LoggableChild):
             client.V1PolicyRule(
                 api_groups=[""],
                 resources=["pods/log", "serviceaccounts"],
-                verbs=["get", "list"]
+                verbs=["get", "list", "watch"]
             ),
         ]
         role = client.V1Role(
