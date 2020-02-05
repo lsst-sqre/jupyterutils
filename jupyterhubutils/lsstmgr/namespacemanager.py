@@ -74,7 +74,7 @@ class LSSTNamespaceManager(LoggableChild):
             client.V1PolicyRule(
                 api_groups=["argoproj.io"],
                 resources=["workflows", "workflows/finalizers"],
-                verbs=["get", "list", "watch", "update", "patch",
+                verbs=["get", "list", "watch", "update", "patch", "create",
                        "delete"]
             ),
             client.V1PolicyRule(
