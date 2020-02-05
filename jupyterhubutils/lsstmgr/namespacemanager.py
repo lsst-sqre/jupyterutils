@@ -48,10 +48,10 @@ class LSSTNamespaceManager(LoggableChild):
                 self.log.info("Namespace '%s' already exists." % namespace)
         # Wait for the namespace to actually appear before creating objects
         #  in it.
-        self._wait_for_namespace()
+        self.wait_for_namespace()
         if cfg.allow_dask_spawn:
             self.log.debug("Ensuring namespaced service account.")
-            self._ensure_namespaced_service_account()
+            self.ensure_namespaced_service_account()
         if self.parent.spawner.enable_namespace_quotas:
             # By the time we need this, quota will have been set, because
             #  we needed it for options form generation.
@@ -60,20 +60,28 @@ class LSSTNamespaceManager(LoggableChild):
             qm.ensure_namespaced_resource_quota(qm.quota)
         self.log.debug("Namespace resources ensured.")
 
-    def _define_namespaced_account_objects(self):
+    def define_namespaced_account_objects(self):
         namespace = self.namespace
         username = self.parent.user.escaped_name
-        account = "{}-{}".format(username, "dask")
+        account = "{}-svcacct".format(username)
         self.service_account = account
         md = client.V1ObjectMeta(
             name=account,
             labels={'argocd.argoproj.io/instance': 'nublado-users'})
         svcacct = client.V1ServiceAccount(metadata=md)
+        # These rules let us manipulate Dask pods and Argo Workflows
         rules = [
             client.V1PolicyRule(
-                api_groups=[""],
-                resources=["pods", "services", "configmaps"],
-                verbs=["get", "list", "watch", "create", "delete"]
+                api_groups=["argoproj.io"],
+                resources=["workflows", "workflows/finalizers"],
+                verbs=["get", "list", "watch", "update", "patch", "create",
+                       "delete"]
+            ),
+            client.V1PolicyRule(
+                api_groups=["argoproj.io"],
+                resources=["workflowtemplates",
+                           "workflowtemplates/finalizers"],
+                verbs=["get", "list", "watch"],
             ),
             client.V1PolicyRule(
                 api_groups=[""],
@@ -82,19 +90,14 @@ class LSSTNamespaceManager(LoggableChild):
             ),
             client.V1PolicyRule(
                 api_groups=[""],
+                resources=["pods", "pods/exec", "services", "configmaps"],
+                verbs=["get", "list", "watch", "create", "delete",
+                       "update", "patch"]
+            ),
+            client.V1PolicyRule(
+                api_groups=[""],
                 resources=["pods/log", "serviceaccounts"],
-                verbs=["get", "list"]
-            ),
-            client.V1PolicyRule(
-                api_groups=["argoproj.io"],
-                resources=["workflows", "workflows/finalizers"],
-                verbs=["get", "list", "watch", "update", "patch", "delete"]
-            ),
-            client.V1PolicyRule(
-                api_groups=["argoproj.io"],
-                resources=["workflowtemplates",
-                           "workflowtemplates/finalizers"],
-                verbs=["get", "list", "watch"],
+                verbs=["get", "list", "watch"]
             ),
         ]
         role = client.V1Role(
@@ -112,14 +115,14 @@ class LSSTNamespaceManager(LoggableChild):
         )
         return svcacct, role, rolebinding
 
-    def _ensure_namespaced_service_account(self):
+    def ensure_namespaced_service_account(self):
         # Create a service account with role and rolebinding to allow it
-        #  to manipulate pods in the namespace.
+        #  to manipulate resources in the namespace.
         self.log.info("Ensuring namespaced service account.")
         namespace = self.namespace
         api = self.parent.api
         rbac_api = self.parent.rbac_api
-        svcacct, role, rolebinding = self._define_namespaced_account_objects()
+        svcacct, role, rolebinding = self.define_namespaced_account_objects()
         account = self.service_account
         try:
             self.log.info("Attempting to create service account.")
@@ -164,7 +167,7 @@ class LSSTNamespaceManager(LoggableChild):
                 self.log.info("Rolebinding '%s' " % account +
                               "already exists in '%s'." % namespace)
 
-    def _wait_for_namespace(self, timeout=30):
+    def wait_for_namespace(self, timeout=30):
         '''Wait for namespace to be created.'''
         namespace = self.namespace
         for dl in range(timeout):
@@ -222,6 +225,7 @@ class LSSTNamespaceManager(LoggableChild):
                                       "namespace '{}'.").format(phase,
                                                                 namespace))
                     return False
+        # FIXME check on workflows as well.
         return True
 
     def destroy_namespaced_resource_quota(self):
