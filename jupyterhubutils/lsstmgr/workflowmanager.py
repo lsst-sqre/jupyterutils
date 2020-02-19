@@ -238,6 +238,9 @@ class LSSTWorkflow(Workflow):
         self.metadata.labels = lbl
         self.metadata.generate_name = self.parms['name'] + '-'
         self.metadata.name = None
+        username = self.parent.user.escaped_name
+        account = "{}-svcacct".format(username)
+        self.spec.service_account_name = account
 
     @template
     def noninteractive(self) -> V1Container:
