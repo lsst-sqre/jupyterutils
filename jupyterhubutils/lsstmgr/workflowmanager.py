@@ -238,7 +238,7 @@ class LSSTWorkflow(Workflow):
         self.metadata.labels = lbl
         self.metadata.generate_name = self.parms['name'] + '-'
         self.metadata.name = None
-        username = self.parent.user.escaped_name
+        username = self.parms['username']
         account = "{}-svcacct".format(username)
         self.spec.service_account_name = account
 
