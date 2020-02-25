@@ -118,13 +118,7 @@ class LSSTWorkflowManager(LoggableChild):
         env['EXTERNAL_GROUPS'] = am.get_group_string()
         env['DEBUG'] = str_true(cfg.debug)
         # Get token, if we have one.
-        auth = None
-        token = None
-        if hasattr(self.parent, 'authenticator') and self.parent.authenticator:
-            auth = self.parent.authenticator
-        if auth:
-            if hasattr(auth, 'token') and auth.token:
-                token = auth.token
+        token = self.parent.parent.authenticator.token
         if token:
             env['ACCESS_TOKEN'] = token
         e_l = self._d2l(env)
