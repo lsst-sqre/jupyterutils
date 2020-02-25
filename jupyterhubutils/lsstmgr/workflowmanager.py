@@ -66,7 +66,7 @@ class LSSTWorkflowManager(LoggableChild):
         em = self.parent.env_mgr
         vm = self.parent.volume_mgr
         am = self.parent.auth_mgr
-        user = self.parent.parent.auth.user
+        user = self.parent.parent.authenticator.user
         em_env = em.get_env()
         size_map = self._resolve_size(data['size'])
         self.log.debug(
@@ -117,6 +117,10 @@ class LSSTWorkflowManager(LoggableChild):
         env['EXTERNAL_UID'] = str(user.auth_state['uid'])
         env['EXTERNAL_GROUPS'] = am.get_group_string()
         env['DEBUG'] = str_true(cfg.debug)
+        # Get token, if we have one.
+        token = self.parent.parent.authenticator.token
+        if token:
+            env['ACCESS_TOKEN'] = token
         e_l = self._d2l(env)
         wf_input['env'] = e_l
         wf_input['username'] = user.escaped_name
@@ -129,6 +133,7 @@ class LSSTWorkflowManager(LoggableChild):
         # ...now put the real values back
         wf_input['vols'] = vols
         wf_input['vmts'] = vmts
+        wf_input['command'] = data['command']
         self.wf_input = wf_input
         wf = LSSTWorkflow(parms=wf_input)
         self.log.debug("Workflow: {}".format(wf))
@@ -241,6 +246,29 @@ class LSSTWorkflow(Workflow):
         username = self.parms['username']
         account = "{}-svcacct".format(username)
         self.spec.service_account_name = account
+        self.metadata.annotations = self.cmd_to_annotations()
+
+    def cmd_to_annotations(self):
+        cmdlist = self.parms['command']
+        if not cmdlist:
+            return
+        annobase = "lsst.org/wf_cmd"
+        idx = 0
+        anno = {}
+        for cmd in cmdlist:
+            akey = annobase + "_{}".format(idx)
+            if len(cmd) < 64:
+                anno[akey] = cmd
+            else:
+                jdx = 0
+                while cmd:
+                    chunk = cmd[:63]
+                    cmd = cmd[63:]
+                    skey = akey + "_{}".format(jdx)
+                    anno[skey] = chunk
+                    jdx = jdx+1
+            idx = idx + 1
+        return anno
 
     @template
     def noninteractive(self) -> V1Container:

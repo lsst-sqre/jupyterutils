@@ -21,6 +21,8 @@ class LSSTAuthenticator(Authenticator):
     '''
     enable_auth_state = True
     delete_invalid_users = True
+    token = None  # Only used for JWT, but we want it as a generic field for
+    # the workflow manager.
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

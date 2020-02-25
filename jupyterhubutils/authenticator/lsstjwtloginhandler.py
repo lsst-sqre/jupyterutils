@@ -110,6 +110,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         if now > expiry:
             self.log.error("JWT has expired!")
             raise web.HTTPError(401)
+        self.authenticator.token = token
         return claims, token
 
     def _jwt_validate_user(self, auth_state):
