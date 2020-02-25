@@ -66,7 +66,7 @@ class LSSTWorkflowManager(LoggableChild):
         em = self.parent.env_mgr
         vm = self.parent.volume_mgr
         am = self.parent.auth_mgr
-        user = self.parent.parent.auth.user
+        user = self.parent.parent.authenticator.user
         em_env = em.get_env()
         size_map = self._resolve_size(data['size'])
         self.log.debug(
