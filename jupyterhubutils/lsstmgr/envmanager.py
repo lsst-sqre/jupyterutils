@@ -18,14 +18,10 @@ class LSSTEnvironmentManager(LoggableChild):
         cfg = self.parent.config
         env = {}
         env['DEBUG'] = str_true(cfg.debug)
-        env['MEM_LIMIT'] = cfg.mem_limit
-        env['CPU_LIMIT'] = cfg.cpu_limit
-        # FIXME
-        # Workaround for a bug in our dask templating.
-        mem_g = cfg.mem_guarantee
-        env['MEM_GUARANTEE'] = self._mem_workaround(mem_g)
-        env['CPU_GUARANTEE'] = cfg.cpu_guarantee
-        env['LAB_SIZE_RANGE'] = cfg.lab_size_range
+        cpug = float(cfg.tiny_cpu_max) / float(cfg.lab_size_range)
+        env['CPU_GUARANTEE'] = str(cpug)
+        env['MEM_GUARANTEE'] = "{}M".format(int(cpug * int(cfg.mb_per_cpu)))
+        env['LAB_SIZE_RANGE'] = str(cfg.lab_size_range)
         env['CULL_TIMEOUT'] = cfg.cull_timeout
         env['CULL_POLICY'] = cfg.cull_policy
         env['RESTRICT_DASK_NODES'] = str_true(cfg.restrict_dask_nodes)
