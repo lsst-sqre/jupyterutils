@@ -66,7 +66,7 @@ class LSSTConfig(metaclass=Singleton):
         self.initial_scan_interval = floatify(
             os.getenv('INITIAL_SCAN_INTERVAL'), 0.2)
         self.max_scan_interval = floatify(os.getenv('MAX_SCAN_INTERVAL'), 5.0)
-        self.tiny_cpu = floatify(os.getenv('TINY_MAX_CPU'), 0.5)
+        self.tiny_cpu_max = floatify(os.getenv('TINY_CPU_MAX'), 0.5)
         self.mb_per_cpu = intify(os.getenv('MB_PER_CPU'), 2048)
         self.size_index = intify(os.getenv('SIZE_INDEX'), 1)
         # Settings for Quota Manager
@@ -84,10 +84,6 @@ class LSSTConfig(metaclass=Singleton):
         self.lab_fs_gid = intify(os.getenv('LAB_FS_GID'), self.lab_gid)
         self.lab_default_image = (os.getenv('LAB_IMAGE') or
                                   "lsstsqre/sciplat-lab:latest")
-        self.mem_limit = os.getenv('LAB_MEM_LIMIT') or '2048M'
-        self.cpu_limit = os.getenv('LAB_CPU_LIMIT') or '1.0'
-        self.mem_guarantee = os.getenv('LAB_MEM_GUARANTEE') or '1M'
-        self.cpu_guarantee = os.getenv('LAB_CPU_GUARANTEE') or '0.02'
         self.lab_size_range = os.getenv('LAB_SIZE_RANGE') or '4.0'
         self.cull_timeout = os.getenv('LAB_CULL_TIMEOUT') or '64800'
         self.cull_policy = os.getenv('LAB_CULL_POLICY') or 'idle:remote'

@@ -172,6 +172,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         am = self.lsst_mgr.auth_mgr
         nm = self.lsst_mgr.namespace_mgr
         vm = self.lsst_mgr.volume_mgr
+        om = self.lsst_mgr.optionsform_mgr
         # Get the standard env and then update it with the environment
         # from our environment manager, except that we want the tokens from
         # the standard env
@@ -213,14 +214,26 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             raise ValueError("No options form data!")
         self.log.debug("User options from form:\n" +
                        json.dumps(self.user_options, sort_keys=True, indent=4))
+        size = self.user_options.get('size')
+        if not size:
+            # Use the deployment defaults
+            size_idx = cfg.size_index
+            size = cfg.form_sizelist[size_idx]
+        image_size = om.sizemap[size]
+        self.log.debug("Image size: {}".format(
+            json.dumps(image_size, sort_keys=True, indent=4)))
+        mem_limit = image_size["mem"]
+        cpu_limit = image_size["cpu"]
+        mem_guar = image_size["mem_guar"]
+        cpu_guar = image_size["cpu_guar"]
+        self.mem_guarantee = mem_guar
+        self.cpu_guarantee = cpu_guar
+        pod_env['MEM_GUARANTEE'] = mem_guar
+        pod_env['MEM_LIMIT'] = mem_limit
+        pod_env['CPU_GUARANTEE'] = str(cpu_guar)
+        pod_env['CPU_LIMIT'] = str(cpu_limit)
         if self.user_options.get('kernel_image'):
             image = self.user_options.get('kernel_image')
-            om = self.lsst_mgr.optionsform_mgr
-            size = self.user_options.get('size')
-            if size:
-                image_size = om.sizemap[size]
-                self.log.debug("Image size: {}".format(
-                    json.dumps(image_size, sort_keys=True, indent=4)))
             colon = image.find(':')
             if colon > -1:
                 imgname = image[:colon]
@@ -253,34 +266,6 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             pod_env['CLEAR_DOTLOCAL'] = "TRUE"
         # Set up Lab pod resource constraints (not namespace quotas)
         # These are the defaults from the config
-        mem_limit = cfg.mem_limit
-        cpu_limit = cfg.cpu_limit
-        if image_size:
-            mem_limit = str(int(image_size["mem"])) + "M"
-            cpu_limit = image_size["cpu"]
-        cpu_limit = float(cpu_limit)
-        self.mem_limit = mem_limit
-        self.cpu_limit = cpu_limit
-        mem_guar = cfg.mem_guarantee
-        cpu_guar = cfg.cpu_guarantee
-        cpu_guar = float(cpu_guar)
-        # Tiny gets the configured (almost nothing) guarantee.
-        #  All others get 1/LAB_SIZE_RANGE times their maximum,
-        #  with a default of 1/4.
-        size_range = float(cfg.lab_size_range)
-        if (image_size and (image_size['name'] != 'tiny')):
-            mem_guar = int(image_size["mem"] / size_range)
-            cpu_guar = float(image_size["cpu"] / size_range)
-        self.mem_guarantee = mem_guar
-        self.cpu_guarantee = cpu_guar
-        # This is a workaround for a bug in our dask template construction
-        memg_str = str(mem_guar)
-        while (memg_str[-1]) == "M":
-            memg_str = memg_str[:-1]
-        pod_env['MEM_GUARANTEE'] = memg_str
-        pod_env['MEM_LIMIT'] = mem_limit
-        pod_env['CPU_GUARANTEE'] = str(cpu_guar)
-        pod_env['CPU_LIMIT'] = str(cpu_limit)
         # We don't care about the image name anymore: the user pod will
         #  be named "nb" plus the username and tag, to keep the pod name
         #  short.
