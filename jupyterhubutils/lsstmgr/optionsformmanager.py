@@ -107,18 +107,23 @@ class LSSTOptionsFormManager(LoggableChild):
         sizemap = OrderedDict()
         # For supported Python versions, dict is ordered anyway...
         sizes = self.parent.config.form_sizelist
-        tiny_cpu = self.parent.config.tiny_cpu
-        mem_per_cpu = self.parent.config.mb_per_cpu
+        tiny_cpu = self.parent.config.tiny_cpu_max
+        mb_per_cpu = self.parent.config.mb_per_cpu
+        size_range = float(self.parent.config.lab_size_range)
         # Each size doubles the previous one.
         cpu = tiny_cpu
         idx = 0
         for sz in sizes:
-            mem = mem_per_cpu * cpu
+            mem_mb = int(mb_per_cpu * cpu)
             sizemap[sz] = {"cpu": cpu,
-                           "mem": mem,
+                           "mem": "{}M".format(mem_mb),
                            "name": sz,
                            "index": idx}
-            desc = sz.title() + " (%.2f CPU, %dM RAM)" % (cpu, mem)
+            min_cpu = float(cpu / size_range)
+            sizemap[sz]["cpu_guar"] = min_cpu
+            min_mem_mb = int(mb_per_cpu * min_cpu)
+            sizemap[sz]["mem_guar"] = "{}M".format(min_mem_mb)
+            desc = sz.title() + " (%.2f CPU, %dM RAM)" % (cpu, mem_mb)
             sizemap[sz]["desc"] = desc
             cpu = cpu * 2
             idx = idx + 1

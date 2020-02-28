@@ -66,36 +66,32 @@ class LSSTWorkflowManager(LoggableChild):
         em = self.parent.env_mgr
         vm = self.parent.volume_mgr
         am = self.parent.auth_mgr
+        om = self.parent.optionsform_mgr
         user = self.parent.parent.authenticator.user
         em_env = em.get_env()
-        size_map = self._resolve_size(data['size'])
+        size_map = om.sizemap.get(data['size'])
+        if not size_map:
+            # Use default size
+            cpu = cfg.tiny_cpu_max * (2 ** cfg.size_index)
+            mem = cfg.mb_per_cpu * cpu
+            cpu_guar = cpu / (float(cfg.lab_size_range))
+            mem_guar = cfg.mb_per_cpu * cpu_guar
+            size_map = {
+                "cpu": str(cpu),
+                "mem": "{}M".format(mem),
+                "cpu_guar": str(cpu_guar),
+                "mem_guar": "{}M".format(mem_guar)
+            }
         self.log.debug(
             "Size '{}' resolves to '{}'".format(data['size'], size_map))
         ml = size_map['mem']
         cl = size_map['cpu']
-        sr = float(cfg.lab_size_range)
-        mg = None
-        cg = None
-        if data['size'] == "tiny":
-            # Take the guarantees from the config object
-            mg = cfg.mem_guarantee
-            mgs = str(mg)
-            # I really screwed up these defaults.
-            while mgs and not mgs[-1].isdigit():
-                mgs = mgs[:-1]
-            if not mgs:
-                mgs = '1.0'
-            mg = float(mgs)
-            cg = cfg.cpu_guarantee
-        else:
-            mg = float(ml / sr)
-            cg = float(cl / sr)
-        mg = int(mg)
-        ml = int(ml)
+        mg = size_map['mem_guar']
+        cg = size_map['cpu_guar']
         wf_input['mem_limit'] = ml
         wf_input['mem_guar'] = mg
-        wf_input['cpu_limit'] = cl
-        wf_input['cpu_guar'] = cg
+        wf_input['cpu_limit'] = str(cl)
+        wf_input['cpu_guar'] = str(cg)
         wf_input['image'] = data['image']
         env = {}
         vols = []
@@ -112,6 +108,10 @@ class LSSTWorkflowManager(LoggableChild):
             data['image'].split(':')[-1].replace('_', '-'),
             data['command'][0].split('/')[-1].replace('_', '-'))
         wf_input['name'] = cname
+        env['MEM_LIMIT'] = ml
+        env['MEM_GUARANTEE'] = mg
+        env['CPU_LIMIT'] = str(cl)
+        env['CPU_GUARANTEE'] = str(cg)
         env['JUPYTERHUB_USER'] = user.escaped_name
         env['NONINTERACTIVE'] = "TRUE"
         env['EXTERNAL_UID'] = str(user.auth_state['uid'])
@@ -138,10 +138,6 @@ class LSSTWorkflowManager(LoggableChild):
         wf = LSSTWorkflow(parms=wf_input)
         self.log.debug("Workflow: {}".format(wf))
         self.workflow = wf
-
-    def _resolve_size(self, size):
-        om = self.parent.optionsform_mgr
-        return om.sizemap.get(size)
 
     def _d2l(self, in_d):
         ll = []
@@ -281,10 +277,11 @@ class LSSTWorkflow(Workflow):
             image_pull_policy="Always",
             volume_mounts=self.parms["vmts"],
             resources=V1ResourceRequirements(
-                limits={"memory": "{}M".format(self.parms['mem_limit']),
-                        "cpu": "{}".format(self.parms['cpu_limit'])},
-                requests={"memory": "{}M".format(self.parms['mem_guar']),
-                          "cpu": "{}".format(self.parms['cpu_guar'])}),
+                limits={"memory": self.parms['mem_limit'],
+                        "cpu": self.parms['cpu_limit']},
+                requests={"memory": self.parms['mem_guar'],
+                          "cpu": self.parms['cpu_guar']}
+            ),
             security_context=V1SecurityContext(
                 run_as_group=self.run_as_group,
                 run_as_user=self.run_as_user,
