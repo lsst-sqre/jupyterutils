@@ -165,8 +165,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             cmd = ctrs[0].args or ctrs[0].command
         # That should be it from the standard get_pod_manifest
         # Now we finally need all that data we have been managing.
-        # Add label for ArgoCD management.
+        # Add label and annotations for ArgoCD management.
         labels['argocd.argoproj.io/instance'] = 'nublado-users'
+        annotations['argocd.argoproj.io/compare-options'] = 'IgnoreExtraneous'
+        annotations['argocd.argoproj.io/sync-options'] = 'Prune=false'
         cfg = self.lsst_mgr.config
         em = self.lsst_mgr.env_mgr
         am = self.lsst_mgr.auth_mgr

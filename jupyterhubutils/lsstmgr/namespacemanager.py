@@ -35,7 +35,11 @@ class LSSTNamespaceManager(LoggableChild):
         ns = client.V1Namespace(
             metadata=client.V1ObjectMeta(
                 name=namespace,
-                labels={'argocd.argoproj.io/instance': 'nublado-users'}))
+                labels={'argocd.argoproj.io/instance': 'nublado-users'},
+                annotations={
+                    'argocd.argoproj.io/compare-options': 'IgnoreExtraneous',
+                    'argocd.argoproj.io/sync-options': 'Prune=false',
+                }))
         try:
             self.log.info("Attempting to create namespace '%s'" % namespace)
             api.create_namespace(ns)

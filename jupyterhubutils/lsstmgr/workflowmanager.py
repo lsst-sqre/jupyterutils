@@ -264,6 +264,12 @@ class LSSTWorkflow(Workflow):
                     anno[skey] = chunk
                     jdx = jdx+1
             idx = idx + 1
+
+        # Add annotations telling Argo CD to not prune these resources or to
+        # count them against the sync state.
+        anno['argocd.argoproj.io/compare-options'] = 'IgnoreExtraneous'
+        anno['argocd.argoproj.io/sync-options'] = 'Prune=false'
+
         return anno
 
     @template
