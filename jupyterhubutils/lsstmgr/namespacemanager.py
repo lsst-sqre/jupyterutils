@@ -71,7 +71,12 @@ class LSSTNamespaceManager(LoggableChild):
         self.service_account = account
         md = client.V1ObjectMeta(
             name=account,
-            labels={'argocd.argoproj.io/instance': 'nublado-users'})
+            labels={'argocd.argoproj.io/instance': 'nublado-users'},
+            annotations={
+                'argocd.argoproj.io/compare-options': 'IgnoreExtraneous',
+                'argocd.argoproj.io/sync-options': 'Prune=false',
+            }
+        )
         svcacct = client.V1ServiceAccount(metadata=md)
         # These rules let us manipulate Dask pods and Argo Workflows
         rules = [
