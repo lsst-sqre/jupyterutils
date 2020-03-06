@@ -180,9 +180,7 @@ class EventReflector(MultiNamespaceResourceReflector):
     def events(self):
         return sorted(
             self.resources.values(),
-            key=lambda x: x.last_timestamp.replace(tzinfo=pytz.UTC) if
-            x.last_timestamp is not None else
-            datetime.datetime.utcfromtimestamp(0)
+            key=lambda event: event.last_timestamp or event.event_time,
         )
 
 
