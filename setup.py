@@ -56,10 +56,11 @@ setuptools.setup(
         'kubernetes>=9.0.0',
         'semver>=2.0.0,<3.0.0',
         'oauthenticator>=0.9.0,<1.0.0',
-        'jupyter-client>=5.0.0,<6.0.0',
+        'jupyter-client>=5.0.0,<7.0.0',
         'jupyterhub-jwtauthenticator>=0.1.0,<1.0.0',
         'jupyterhub-kubespawner>=0.10.0,<1.0.0',
         'jinja2>=2.0.0,<3.0.0',
+        'pytz>=2019.3',
         'argo-workflows-sdk'
     ],
     entry_points={
