@@ -78,7 +78,8 @@ class LSSTNamespaceManager(LoggableChild):
             }
         )
         svcacct = client.V1ServiceAccount(metadata=md)
-        # These rules let us manipulate Dask pods and Argo Workflows
+        # These rules let us manipulate Dask pods, Argo Workflows, and
+        #  Multus CNI interfaces
         rules = [
             client.V1PolicyRule(
                 api_groups=["argoproj.io"],
@@ -108,6 +109,16 @@ class LSSTNamespaceManager(LoggableChild):
                 resources=["pods/log", "serviceaccounts"],
                 verbs=["get", "list", "watch"]
             ),
+            client.V1PolicyRule(
+                api_groups=[""],
+                resources=["pods/status"],
+                verbs=["get", "update"]
+            ),
+            client.V1PolicyRule(
+                api_groups=["k8s.cni.cncf.io"],
+                resources=['*'],
+                verbs=['*']
+            )
         ]
         role = client.V1Role(
             rules=rules,
