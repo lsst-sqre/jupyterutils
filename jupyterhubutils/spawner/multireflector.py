@@ -182,7 +182,7 @@ class EventReflector(MultiNamespaceResourceReflector):
             self.resources.values(),
             key=lambda x: x.last_timestamp.replace(tzinfo=pytz.UTC) if
             x.last_timestamp is not None else
-            datetime.datetime.fromtimestamp(0, tzinfo=pytz.UTC),
+            datetime.datetime.utcfromtimestamp(0)
         )
 
 
