@@ -109,16 +109,16 @@ class LSSTNamespaceManager(LoggableChild):
                 resources=["pods/log", "serviceaccounts"],
                 verbs=["get", "list", "watch"]
             ),
-            client.V1PolicyRule(
-                api_groups=[""],
-                resources=["pods/status"],
-                verbs=["get", "update"]
-            ),
-            client.V1PolicyRule(
-                api_groups=["k8s.cni.cncf.io"],
-                resources=['*'],
-                verbs=['*']
-            )
+            #            client.V1PolicyRule(
+            #                api_groups=[""],
+            #                resources=["pods/status"],
+            #                verbs=["get", "update"]
+            #            ),
+            #            client.V1PolicyRule(
+            #                api_groups=["k8s.cni.cncf.io"],
+            #                resources=['*'],
+            #                verbs=['*']
+            #            )
         ]
         role = client.V1Role(
             rules=rules,

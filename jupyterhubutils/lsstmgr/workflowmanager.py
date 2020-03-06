@@ -254,7 +254,7 @@ class LSSTWorkflow(Workflow):
 
         # Enable multus if requested
         if self.parms['enable_multus']:
-            anno['k8s.v1.cni.cncf.io/networks'] = 'macvlan-conf'
+            anno['k8s.v1.cni.cncf.io/networks'] = 'kube-system/macvlan-conf'
 
         cmdlist = self.parms['command']
         if not cmdlist:
