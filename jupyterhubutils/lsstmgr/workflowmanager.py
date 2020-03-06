@@ -93,6 +93,7 @@ class LSSTWorkflowManager(LoggableChild):
         wf_input['cpu_limit'] = str(cl)
         wf_input['cpu_guar'] = str(cg)
         wf_input['image'] = data['image']
+        wf_input['enable_multus'] = cfg.enable_multus
         env = {}
         vols = []
         vmts = []
@@ -242,15 +243,24 @@ class LSSTWorkflow(Workflow):
         username = self.parms['username']
         account = "{}-svcacct".format(username)
         self.spec.service_account_name = account
-        self.metadata.annotations = self.cmd_to_annotations()
+        self.metadata.annotations = self.build_annotations()
 
-    def cmd_to_annotations(self):
+    def build_annotations(self):
+        anno = {}
+        # Add annotations telling Argo CD to not prune these resources or to
+        # count them against the sync state.
+        anno['argocd.argoproj.io/compare-options'] = 'IgnoreExtraneous'
+        anno['argocd.argoproj.io/sync-options'] = 'Prune=false'
+
+        # Enable multus if requested
+        if self.parms['enable_multus']:
+            anno['k8s.v1.cni.cncf.io/networks'] = 'kube-system/macvlan-conf'
+
         cmdlist = self.parms['command']
         if not cmdlist:
-            return
+            return anno
         annobase = "lsst.org/wf_cmd"
         idx = 0
-        anno = {}
         for cmd in cmdlist:
             akey = annobase + "_{}".format(idx)
             if len(cmd) < 64:
@@ -264,11 +274,6 @@ class LSSTWorkflow(Workflow):
                     anno[skey] = chunk
                     jdx = jdx+1
             idx = idx + 1
-
-        # Add annotations telling Argo CD to not prune these resources or to
-        # count them against the sync state.
-        anno['argocd.argoproj.io/compare-options'] = 'IgnoreExtraneous'
-        anno['argocd.argoproj.io/sync-options'] = 'Prune=false'
 
         return anno
 

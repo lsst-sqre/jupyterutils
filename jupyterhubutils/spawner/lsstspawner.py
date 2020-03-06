@@ -292,6 +292,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         pod_env['DASK_VOLUME_B64'] = vm.get_dask_volume_b64()
         self.volumes = vm.k8s_volumes
         self.volume_mounts = vm.k8s_vol_mts
+        # Add multus annotations if requested
+        if cfg.enable_multus:
+            annotations.update(
+                {'k8s.v1.cni.cncf.io/networks': 'kube-system/macvlan-conf'})
         # Generate the pod definition.
         sanitized_env = sanitize_dict(pod_env, [
             'ACCESS_TOKEN', 'GITHUB_ACCESS_TOKEN',
