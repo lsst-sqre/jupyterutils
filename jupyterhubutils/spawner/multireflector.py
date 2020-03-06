@@ -1,6 +1,7 @@
 # Inspired by, and based on, Adam Tilghman's Multi-Namespace work in
 #  https://github.com/jupyterhub/kubespawner/pull/218
 import datetime
+import pytz
 import time
 from kubernetes import watch
 from kubespawner.reflector import NamespacedResourceReflector
@@ -179,8 +180,9 @@ class EventReflector(MultiNamespaceResourceReflector):
     def events(self):
         return sorted(
             self.resources.values(),
-            key=lambda x: x.last_timestamp if x.last_timestamp is not None else
-            datetime.datetime.fromtimestamp(0),
+            key=lambda x: x.last_timestamp.replace(tzinfo=pytz.UTC) if
+            x.last_timestamp is not None else
+            datetime.datetime.fromtimestamp(0, tzinfo=pytz.UTC),
         )
 
 
