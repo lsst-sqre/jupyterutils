@@ -67,6 +67,22 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         #
         # This might change with Argo Workflow.
         # self.log.debug("Spawner: {}".format(json.dumps(self.dump())))
+        self.log.debug("Setting LSST Manager from authenticated user.")
+        user = self.user
+        if not user:
+            self.log.error("No user found!")
+            raise RuntimeError("Could not create spawner!")
+        auth = user.authenticator
+        if not auth:
+            self.log.error("No authenticator found!")
+            raise RuntimeError("Could not create spawner!")
+        lm = auth.lsst_mgr
+        if not lm:
+            self.log.error("No LSST Manager found!")
+            raise RuntimeError("Could not create spawner!")
+        self.lsst_mgr = lm
+        lm.spawner = self
+        lm.user = user
         self.log.debug("Initialized {}".format(__name__))
 
     def auth_state_hook(self, spawner, auth_state):
@@ -83,13 +99,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         This really is stuff that should get set from auth_state_hook...
         But as it happens, that doesn't run until after get_options_form.
         '''
-
-        self.log.debug("Setting LSST Manager from authenticated user.")
-        auth = self.user.authenticator
-        lm = auth.lsst_mgr
-        self.lsst_mgr = lm
-        lm.spawner = self
-        lm.user = self.user
+        lm = self.lsst_mgr
         # Take the APIs from the api_manager
         self.api = lm.api_mgr.api
         self.rbac_api = lm.api_mgr.rbac_api
@@ -149,6 +159,9 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     def options_from_form(self, formdata=None):
         '''Delegate to form manager.
         '''
+        # LSST Manager sometimes unset when we make it here.  I don't
+        #  understand why that is.  Let's try moving the hooking up
+        #  lsst_mgr into __init__ rather than get_form_options.
         return self.lsst_mgr.optionsform_mgr.options_from_form(formdata)
 
     @gen.coroutine
