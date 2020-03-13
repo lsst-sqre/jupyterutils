@@ -23,7 +23,7 @@ def github_api_headers(access_token):
 class LSSTGitHubOAuthenticator(LSSTAuthenticator,
                                oauthenticator.GitHubOAuthenticator):
     login_handler = oauthenticator.OAuthLoginHandler
-    scope = ['read:org', 'user:email', 'public:repo']
+    scope = ['read:org', 'user:email', 'public_repo']
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
