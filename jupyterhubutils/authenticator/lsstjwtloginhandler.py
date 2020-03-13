@@ -13,12 +13,21 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
     def get(self):
         '''Authenticate on get() via reading the token from HTTP headers.
         '''
-        # This is taken from https://github.com/mogthesprog/jwtauthenticator
-        #  but with our additional claim information checked and stuffed
-        #  into auth_state, and allow/deny lists checked.
+        _ = yield self._jwt_authenticate()
         #
         # We can't just use the superclass because it issues the redirect,
         #  and we can't do that until we do our additional checking.
+        _url = url_path_join(self.hub.server.base_url, 'home')
+        next_url = self.get_argument('next', default=False)
+        if next_url:
+            _url = next_url
+        self.redirect(_url)
+
+    @gen.coroutine
+    def _jwt_authenticate(self):
+        # This is taken from https://github.com/mogthesprog/jwtauthenticator
+        #  but with our additional claim information checked and stuffed
+        #  into auth_state, and allow/deny lists checked.
         claims, token = yield self._check_auth_header()
         username_claim_field = self.authenticator.username_claim_field
         username = self.retrieve_username(claims, username_claim_field)
@@ -34,11 +43,6 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             raise web.HTTPError(403)
         _ = yield user.save_auth_state(auth_state)
         self.set_login_cookie(user)
-        _url = url_path_join(self.hub.server.base_url, 'home')
-        next_url = self.get_argument('next', default=False)
-        if next_url:
-            _url = next_url
-        self.redirect(_url)
 
     @gen.coroutine
     def refresh_user(self, user, handler=None):
