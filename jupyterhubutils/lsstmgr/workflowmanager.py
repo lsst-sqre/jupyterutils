@@ -1,4 +1,5 @@
 import json
+import os
 from argo.workflows.sdk import Workflow, template
 # This is just a K8s V1Container.
 from argo.workflows.sdk.templates import V1Container
@@ -88,6 +89,13 @@ class LSSTWorkflowManager(LoggableChild):
         cl = size_map['cpu']
         mg = size_map['mem_guar']
         cg = size_map['cpu_guar']
+        # If we actually have this in the environment, use it (Dask requires
+        #  it due to our configuration).  If we do not, then make up something
+        #  plausible, but it really doesn't matter if we get it right, because
+        #  it's not like we're using the Dask proxy dashboard from inside
+        #  a Workflow anyway.
+        synth_jsp = '/nb/user/{}'.format(user)
+        jsp = os.getenv('JUPYTERHUB_SERVER_PREFIX', synth_jsp)
         wf_input['mem_limit'] = ml
         wf_input['mem_guar'] = mg
         wf_input['cpu_limit'] = str(cl)
@@ -117,6 +125,7 @@ class LSSTWorkflowManager(LoggableChild):
         env['NONINTERACTIVE'] = "TRUE"
         env['EXTERNAL_UID'] = str(user.auth_state['uid'])
         env['EXTERNAL_GROUPS'] = am.get_group_string()
+        env['JUPYTERHUB_SERVER_PREFIX'] = jsp
         env['DEBUG'] = str_true(cfg.debug)
         # Get token, if we have one.
         token = self.parent.parent.authenticator.token
