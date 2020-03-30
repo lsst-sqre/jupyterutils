@@ -94,7 +94,7 @@ class LSSTWorkflowManager(LoggableChild):
         #  plausible, but it really doesn't matter if we get it right, because
         #  it's not like we're using the Dask proxy dashboard from inside
         #  a Workflow anyway.
-        synth_jsp = '/nb/user/{}'.format(user)
+        synth_jsp = '/nb/user/{}'.format(user.escaped_name)
         jsp = os.getenv('JUPYTERHUB_SERVER_PREFIX', synth_jsp)
         wf_input['mem_limit'] = ml
         wf_input['mem_guar'] = mg
