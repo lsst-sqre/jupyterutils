@@ -24,6 +24,12 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         self.redirect(_url)
 
     @gen.coroutine
+    def post(self):
+        '''Also authenticate on POST, if necessary.'''
+        _ = yield(self._jwt_authenticate())
+        yield super().post()
+
+    @gen.coroutine
     def _jwt_authenticate(self):
         # This is taken from https://github.com/mogthesprog/jwtauthenticator
         #  but with our additional claim information checked and stuffed
