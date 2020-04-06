@@ -2,6 +2,7 @@
 authentication logic to its auth_mgr.
 '''
 import oauthenticator
+from eliot import log_call
 from tornado import gen
 from .lsstauth import LSSTAuthenticator
 from ..lsstmgr import check_membership
@@ -18,6 +19,7 @@ class LSSTCILogonOAuthenticator(LSSTAuthenticator,
         self.log.debug("Creating LSSTCILogonOAuthenticator")
         super().__init__(*args, **kwargs)
 
+    @log_call
     @gen.coroutine
     def authenticate(self, handler, data=None):
         '''Authenticate and set UID/groups on auth_mgr.

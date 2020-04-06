@@ -6,6 +6,7 @@ This module exports `NamespacedKubeSpawner` class, which is the spawner
 implementation that should be used by JupyterHub.
 '''
 
+from eliot import log_call
 from jupyterhub.utils import exponential_backoff
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -65,6 +66,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         #  initialization loop
         self.log.debug("MultiNamespaceSpawner initialized.")
 
+    @log_call
     def auth_state_hook(self, spawner, auth_state):
         # Start the watchers.
         # Restart pod/event watcher
@@ -113,6 +115,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         # pod doesn't exist or has been deleted
         return 1
 
+    @log_call
     @gen.coroutine
     def _start(self):
         '''Start the user's pod.
@@ -188,6 +191,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
             )
         return (pod.status.pod_ip, self.port)
 
+    @log_call
     @gen.coroutine
     def stop(self, now=False):
         delete_options = client.V1DeleteOptions()

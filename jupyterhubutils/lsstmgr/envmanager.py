@@ -1,3 +1,5 @@
+import json
+from eliot import log_call
 from ..utils import str_true, sanitize_dict
 from .. import LoggableChild
 
@@ -11,6 +13,7 @@ class LSSTEnvironmentManager(LoggableChild):
     '''
     pod_env = {}
 
+    @log_call
     def create_pod_env(self):
         '''Return a dict mapping string to string for injection into the
         pod environment.
@@ -51,6 +54,7 @@ class LSSTEnvironmentManager(LoggableChild):
         self.log.debug("create_env yielded:\n.{}".format(sanitized))
         self.pod_env = cleaned
 
+    @log_call
     def _mem_workaround(self, mem):
         '''We need to stop appending "M" to the dask template.  For now
         we return size-in-megabytes-with-no-suffix.
@@ -87,20 +91,24 @@ class LSSTEnvironmentManager(LoggableChild):
             pass
         return str(mem_i)
 
+    @log_call
     def _clean_env(self, env):
         return {str(k): str(v) for k, v in env.items() if (v is not None and
                                                            str(v) != '')}
 
+    @log_call
     def get_env(self):
         '''Return the whole stored environment to caller as a dict.
         '''
         return self.pod_env
 
+    @log_call
     def get_env_key(self, key):
         '''Return value of a specific key in the stored environment to caller.
         '''
         return self.pod_env.get(key)
 
+    @log_call
     def _sanitize(self, incoming):
         sensitive = ['ACCESS_TOKEN', 'GITHUB_ACCESS_TOKEN',
                      'JUPYTERHUB_API_TOKEN', 'JPY_API_TOKEN']
@@ -113,3 +121,6 @@ class LSSTEnvironmentManager(LoggableChild):
               "pod_env": self._sanitize(self.pod_env)
               }
         return ed
+
+    def toJSON(self):
+        return json.dumps(self.dump())

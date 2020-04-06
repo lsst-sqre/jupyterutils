@@ -61,6 +61,8 @@ setuptools.setup(
         'jupyterhub-kubespawner>=0.10.0,<1.0.00',
         'jinja2>=2.0.0,<3.0.0',
         'pytz>=2019.3',
+        'eliot',
+        'eliot-tree',
         'argo-workflows>=3.0.0,<3.2.0',
         'argo-workflows-sdk'
     ],

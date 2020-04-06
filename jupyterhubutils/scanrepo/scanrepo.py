@@ -8,6 +8,7 @@ import semver
 import urllib.parse
 import urllib.request
 
+from eliot import log_call
 from ..utils import make_logger
 
 
@@ -106,6 +107,7 @@ class ScanRepo(object):
         if self._session:
             self._session.close()
 
+    @log_call
     def extract_image_info(self):
         '''Build image name list and image description list.
         '''
@@ -125,6 +127,7 @@ class ScanRepo(object):
         ls = [self.owner + "/" + self.name + ":" + x["name"] for x in cs]
         return ls, ldescs
 
+    @log_call
     def _read_cachefile(self):
         fn = self.cachefile
         try:
@@ -160,6 +163,7 @@ class ScanRepo(object):
                         rm[tag] = {"last_updated": updatedstr,
                                    "name": tag}
 
+    @log_call
     def _describe_tag(self, tag):
         # New-style tags have underscores separating components.
         ld = tag  # Default description is just the tag name
@@ -228,6 +232,7 @@ class ScanRepo(object):
                 ld = "Experimental %s" % rest
         return ld
 
+    @log_call
     def resolve_tag(self, tag):
         '''Resolve a tag (used for "recommended" or "latest*").
         '''
@@ -246,10 +251,12 @@ class ScanRepo(object):
                 self.logger.debug("Found matching hash for tag '{}'".format(k))
                 return k
 
+    @log_call
     def _data_to_json(self):
         return json.dumps(self.data, sort_keys=True, indent=4,
                           default=self._serialize_datetime)
 
+    @log_call
     def _namemap_to_json(self):
         modmap = {}
         nm = self._name_to_manifest
@@ -267,6 +274,7 @@ class ScanRepo(object):
                              "hash": ihash}
         return json.dumps(modmap, sort_keys=True, indent=4)
 
+    @log_call
     def _serialize_datetime(self, o):
         if isinstance(o, datetime.datetime):
             dstr = o.__str__().replace(' ', 'T')
@@ -274,6 +282,7 @@ class ScanRepo(object):
                 dstr += "Z"
             return dstr
 
+    @log_call
     def report(self):
         '''Print the tag data.
         '''
@@ -288,16 +297,19 @@ class ScanRepo(object):
             print("LAB_CONTAINER_DESCS=\'%s\'" % ldstr)
             print("export LAB_CONTAINER_NAMES LAB_CONTAINER_DESCS")
 
+    @log_call
     def get_data(self):
         '''Return the tag data.
         '''
         return self.data
 
+    @log_call
     def get_all_tags(self):
         '''Return all tags in the repository (sorted by last_updated).
         '''
         return self._all_tags
 
+    @log_call
     def _get_url(self, **kwargs):
         params = None
         resp = None
@@ -311,6 +323,7 @@ class ScanRepo(object):
         page = resp.read()
         return page
 
+    @log_call
     def scan(self):
         '''Perform the repository scan.
         '''
@@ -343,6 +356,7 @@ class ScanRepo(object):
         self._map_names_to_manifests()
         self._reduce_results()
 
+    @log_call
     def _update_results_map(self, results):
         rm = self._results_map
         for res in results:
@@ -351,6 +365,7 @@ class ScanRepo(object):
                 rm[name] = {}
             rm[name].update(res)
 
+    @log_call
     def _map_names_to_manifests(self):
         results = self._results_map
         namemap = self._name_to_manifest
@@ -425,6 +440,7 @@ class ScanRepo(object):
                 self.log.error("Failed to write cache file: {}".format(exc))
             # We're up to date.
 
+    @log_call
     def _writecachefile(self):
         if self.cachefile:
             try:
@@ -434,6 +450,7 @@ class ScanRepo(object):
                 self.logger.error(
                     "Could not write to {}: {}".format(self.cachefile, exc))
 
+    @log_call
     def _reduce_results(self):
         results = self._results
         sort_field = self.sort_field
@@ -600,6 +617,7 @@ class ScanRepo(object):
         # Return all new style names first.
         return sorted_newstyle.extend(oldstyle)
 
+    @log_call
     def _sort_releases_by_name(self, r_candidates):
         # rXYZrc2 should *precede* rXYZ
         # We're going to decorate short (that is, no rc tag) release names
@@ -617,6 +635,7 @@ class ScanRepo(object):
             c["name"] = nm[xtag]
         return r_candidates
 
+    # Don't annotate this one; datetime isn't serializable.
     def _convert_time(self, ts):
         f = '%Y-%m-%dT%H:%M:%S.%f%Z'
         if ts[-1] == "Z":
