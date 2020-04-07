@@ -3,6 +3,7 @@ authentication to its auth_mgr.
 '''
 import json
 import oauthenticator
+from eliot import log_call
 from oauthenticator.common import next_page_from_links
 from tornado import gen
 from tornado.httpclient import HTTPRequest, AsyncHTTPClient, HTTPError
@@ -11,6 +12,7 @@ from ..lsstmgr import check_membership
 from ..utils import make_logger
 
 
+@log_call
 def github_api_headers(access_token):
     '''Generate API headers for communicating with GitHub.
     '''
@@ -30,6 +32,7 @@ class LSSTGitHubOAuthenticator(LSSTAuthenticator,
         self.log.debug("Creating LSSTGitHubOAuthenticator.")
         super().__init__(*args, **kwargs)
 
+    @log_call
     @gen.coroutine
     def authenticate(self, handler, data=None):
         '''Authenticate and store data on auth_mgr.
@@ -56,6 +59,7 @@ class LSSTGitHubOAuthenticator(LSSTAuthenticator,
         ast['uid'] = ast['github_user']['id']
         return userdict
 
+    @log_call
     @gen.coroutine
     def _get_github_user_organizations(self, access_token):
         # Requires 'read:org' token scope.
@@ -78,6 +82,7 @@ class LSSTGitHubOAuthenticator(LSSTAuthenticator,
                 orgmap[group] = entry["id"]
         return orgmap
 
+    @log_call
     @gen.coroutine
     def _set_github_user_email(self, auth_state, access_token):
         gh_user = auth_state["github_user"]
@@ -93,6 +98,7 @@ class LSSTGitHubOAuthenticator(LSSTAuthenticator,
         gh_user["email"] = gh_email
         # And now it will be stored with auth_state
 
+    @log_call
     @gen.coroutine
     def _get_github_user_email(self, access_token):
         # Determine even private email, if the token has 'user:email'

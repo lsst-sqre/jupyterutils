@@ -2,6 +2,7 @@ import base64
 import json
 import os
 import yaml
+from eliot import log_call
 from kubernetes import client
 from .. import LoggableChild
 
@@ -13,6 +14,7 @@ class LSSTVolumeManager(LoggableChild):
     k8s_volumes = []
     k8s_vol_mts = []
 
+    @log_call
     def make_volumes_from_config(self):
         '''Create volume definition representation from document.
         Override this in a subclass if you like.
@@ -51,6 +53,7 @@ class LSSTVolumeManager(LoggableChild):
         self.log.debug("Volumes: {}".format(vollist))
         self._define_k8s_object_representations()
 
+    @log_call
     def _define_k8s_object_representations(self):
         self.k8s_volumes = []
         self.k8s_vol_mts = []
@@ -95,9 +98,11 @@ class LSSTVolumeManager(LoggableChild):
             mt.read_only = True
         return mt
 
+    @log_call
     def _get_volume_name_for_mountpoint(self, mountpoint):
         return mountpoint[1:].replace('/', '-')
 
+    @log_call
     def _get_volume_yaml_str(self, left_pad=0):
         vols = self.k8s_volumes
         if not vols:
@@ -123,6 +128,7 @@ class LSSTVolumeManager(LoggableChild):
         ystr = yaml.dump(vs)
         return self._left_pad(ystr, left_pad)
 
+    @log_call
     def _get_volume_mount_yaml_str(self, left_pad=0):
         vms = self.k8s_vol_mts
         if not vms:
@@ -140,12 +146,14 @@ class LSSTVolumeManager(LoggableChild):
         ystr = yaml.dump(vs)
         return self._left_pad(ystr, left_pad)
 
+    @log_call
     def _left_pad(self, line_str, left_pad=0):
         pad = ' ' * left_pad
         ylines = line_str.split("\n")
         padlines = [pad + l for l in ylines]
         return "\n".join(padlines)
 
+    @log_call
     def get_dask_volume_b64(self):
         '''Return the base-64 encoding of the K8s statements to create
         the pod's mountpoints.  Probably better handled as a ConfigMap.
@@ -164,3 +172,6 @@ class LSSTVolumeManager(LoggableChild):
               "k8s_volumes": [str(x) for x in self.k8s_volumes],
               "k8s_vol_mts": [str(x) for x in self.k8s_vol_mts]}
         return vd
+
+    def toJSON(self):
+        return json.dumps(self.dump())

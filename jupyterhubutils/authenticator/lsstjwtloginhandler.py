@@ -1,6 +1,7 @@
 '''LSST Login Handler to use JWT token present in request headers.
 '''
 import datetime
+from eliot import log_call
 from tornado import gen, web
 from jupyterhub.utils import url_path_join
 from jwtauthenticator.jwtauthenticator import JSONWebTokenLoginHandler
@@ -9,6 +10,7 @@ from ..lsstmgr import check_membership
 
 class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
 
+    @log_call
     @gen.coroutine
     def get(self):
         '''Authenticate on get() via reading the token from HTTP headers.
@@ -23,12 +25,14 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             _url = next_url
         self.redirect(_url)
 
+    @log_call
     @gen.coroutine
     def post(self):
         '''Also authenticate on POST, if necessary.'''
         _ = yield(self._jwt_authenticate())
         yield super().post()
 
+    @log_call
     @gen.coroutine
     def _jwt_authenticate(self):
         # This is taken from https://github.com/mogthesprog/jwtauthenticator
@@ -50,6 +54,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         _ = yield user.save_auth_state(auth_state)
         self.set_login_cookie(user)
 
+    @log_call
     @gen.coroutine
     def refresh_user(self, user, handler=None):
         '''Validate the token and force re-auth if the claims are not
@@ -68,6 +73,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
                       "claims": claims}
         return auth_state
 
+    @log_call
     @gen.coroutine
     def _check_auth_header(self):
         # Either returns (valid) claims and token,
@@ -123,6 +129,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         self.authenticator.token = token
         return claims, token
 
+    @log_call
     def _jwt_validate_user(self, auth_state):
         cfg = self.authenticator.lsst_mgr.config
         claims = auth_state['claims']

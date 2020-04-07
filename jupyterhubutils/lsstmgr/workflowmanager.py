@@ -3,6 +3,7 @@ import os
 from argo.workflows.sdk import Workflow, template
 # This is just a K8s V1Container.
 from argo.workflows.sdk.templates import V1Container
+from eliot import log_call, start_action
 from kubernetes.client import V1ResourceRequirements, V1SecurityContext
 from kubernetes.client.rest import ApiException
 from kubernetes import client
@@ -22,6 +23,7 @@ class LSSTWorkflowManager(LoggableChild):
     cfg_map = None
     wf_input = None
 
+    @log_call
     def define_configmap(self, data):
         '''This returns a k8s configmap using the data from the new-workflow
         POST.
@@ -54,6 +56,7 @@ class LSSTWorkflowManager(LoggableChild):
         self.log.debug("Created configmap '{}': {}".format(cm_name, jd))
         self.cfg_map = k8s_configmap
 
+    @log_call
     def define_workflow(self, data):
         '''This is basically our equivalent of get_pod_manifest().
         It creates a dict which we will pass to the workflow template
@@ -149,6 +152,7 @@ class LSSTWorkflowManager(LoggableChild):
         self.log.debug("Workflow: {}".format(wf))
         self.workflow = wf
 
+    @log_call
     def _d2l(self, in_d):
         ll = []
         for k in in_d:
@@ -156,6 +160,7 @@ class LSSTWorkflowManager(LoggableChild):
                        "value": in_d[k]})
         return ll
 
+    @log_call
     def list_workflows(self):
         namespace = self.parent.namespace_mgr.namespace
         api = self.parent.wf_api
@@ -176,6 +181,7 @@ class LSSTWorkflowManager(LoggableChild):
             wfs = api.list_namespaced_workflows(namespace=namespace)
         return wfs
 
+    @log_call
     def create_workflow(self):
         workflow = self.workflow
         namespace = self.parent.namespace_mgr.namespace
@@ -187,6 +193,7 @@ class LSSTWorkflowManager(LoggableChild):
         wf = api.create_namespaced_workflow(namespace, workflow)
         return wf
 
+    @log_call
     def create_configmap(self):
         api = self.parent.api  # Core, not Workflow
         namespace = self.parent.namespace_mgr.namespace
@@ -203,6 +210,7 @@ class LSSTWorkflowManager(LoggableChild):
             else:
                 self.log.info("Configmap already exists.")
 
+    @log_call
     def submit_workflow(self, data):
         self.define_workflow(data)
         nm = self.parent.namespace_mgr
@@ -211,12 +219,14 @@ class LSSTWorkflowManager(LoggableChild):
         wf = self.create_workflow()
         return wf
 
+    @log_call
     def delete_workflow(self, wfid):
         namespace = self.parent.namespace_mgr.namespace
         api = self.parent.wf_api
         wf = api.delete_namespaced_workflow(namespace, wfid)
         return wf
 
+    @log_call
     def get_workflow(self, wfid):
         namespace = self.parent.namespace_mgr.namespace
         api = self.parent.wf_api
@@ -233,6 +243,9 @@ class LSSTWorkflowManager(LoggableChild):
               "wf_input": self.wf_input
               }
         return wd
+
+    def toJSON(self):
+        return json.dumps(self.dump())
 
 
 class LSSTWorkflow(Workflow):
@@ -254,6 +267,7 @@ class LSSTWorkflow(Workflow):
         self.spec.service_account_name = account
         self.metadata.annotations = self.build_annotations()
 
+    @log_call
     def build_annotations(self):
         anno = {}
         # Add annotations telling Argo CD to not prune these resources or to
@@ -286,32 +300,35 @@ class LSSTWorkflow(Workflow):
 
         return anno
 
+    # This cannot be annotated with @log_call--it doesn't play well
+    #  with the @template decorator
     @template
     def noninteractive(self) -> V1Container:
-        container = V1Container(
-            command=["/opt/lsst/software/jupyterlab/provisionator.bash"],
-            args=[],
-            image=self.parms["image"],
-            name=self.parms["name"],
-            env=self.parms["env"],
-            image_pull_policy="Always",
-            volume_mounts=self.parms["vmts"],
-            resources=V1ResourceRequirements(
-                limits={"memory": self.parms['mem_limit'],
-                        "cpu": self.parms['cpu_limit']},
-                requests={"memory": self.parms['mem_guar'],
-                          "cpu": self.parms['cpu_guar']}
-            ),
-            security_context=V1SecurityContext(
-                run_as_group=self.run_as_group,
-                run_as_user=self.run_as_user,
+        with start_action(action_type="noninteractive_container"):
+            container = V1Container(
+                command=["/opt/lsst/software/jupyterlab/provisionator.bash"],
+                args=[],
+                image=self.parms["image"],
+                name=self.parms["name"],
+                env=self.parms["env"],
+                image_pull_policy="Always",
+                volume_mounts=self.parms["vmts"],
+                resources=V1ResourceRequirements(
+                    limits={"memory": self.parms['mem_limit'],
+                            "cpu": self.parms['cpu_limit']},
+                    requests={"memory": self.parms['mem_guar'],
+                              "cpu": self.parms['cpu_guar']}
+                ),
+                security_context=V1SecurityContext(
+                    run_as_group=self.run_as_group,
+                    run_as_user=self.run_as_user,
+                )
             )
-        )
-        self.volumes = self.parms['vols']
-        lbl = {'argocd.argoproj.io/instance': 'nublado-users'}
-        self.metadata.labels = lbl
-        self.metadata.generate_name = self.parms['name'] + '-'
-        self.metadata.name = None
-        self.service_account_name = self.parms['username'] + '-svcacct'
+            self.volumes = self.parms['vols']
+            lbl = {'argocd.argoproj.io/instance': 'nublado-users'}
+            self.metadata.labels = lbl
+            self.metadata.generate_name = self.parms['name'] + '-'
+            self.metadata.name = None
+            self.service_account_name = self.parms['username'] + '-svcacct'
 
-        return container
+            return container

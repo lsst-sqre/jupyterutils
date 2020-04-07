@@ -1,6 +1,7 @@
 '''LSST Authenticator to use JWT token present in request headers.
 '''
 import asyncio
+from eliot import log_call
 from jwtauthenticator.jwtauthenticator import JSONWebTokenAuthenticator
 from .lsstauth import LSSTAuthenticator
 from .lsstjwtloginhandler import LSSTJWTLoginHandler
@@ -20,6 +21,7 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
         self.log.debug("Creating LSSTJWTAuthenticator")
         super().__init__(*args, **kwargs)
 
+    @log_call
     def get_handlers(self, app):
         '''Install custom handlers.
         '''
@@ -27,6 +29,7 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
             (r'/login', LSSTJWTLoginHandler),
         ]
 
+    @log_call
     def logout_url(self, base_url):
         '''Returns the logout URL for JWT.
         '''
@@ -39,8 +42,9 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
         #  It's cheating, but we'll just check to see if there is
         #  a custom method for refresh_user on the handler and call it
         #  if so.  That's true for the LSST JWT Authenticator case.
-        retval = await super().refresh_user(user, handler)
-        if hasattr(handler, 'refresh_user'):
-            return await handler.refresh_user(user, handler)
-        else:
-            return retval
+        with start_action(action_type="refresh_user"):
+            retval = await super().refresh_user(user, handler)
+            if hasattr(handler, 'refresh_user'):
+                return await handler.refresh_user(user, handler)
+            else:
+                return retval

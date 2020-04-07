@@ -1,3 +1,5 @@
+import json
+from eliot import log_call
 from .. import Loggable
 from .apimanager import LSSTAPIManager
 from .authmanager import LSSTAuthManager
@@ -55,6 +57,7 @@ class LSSTMiddleManager(Loggable):
         self.rbac_api = self.api_mgr.rbac_api
         self.wf_api = self.api_mgr.wf_api
 
+    @log_call
     def ensure_resources(self):
         '''Delegate to namespace manager.
         '''
@@ -80,3 +83,6 @@ class LSSTMiddleManager(Loggable):
               "workflow_mgr": self.workflow_mgr.dump()
               }
         return md
+
+    def toJSON(self):
+        return json.dumps(self.dump())
