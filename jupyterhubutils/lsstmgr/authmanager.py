@@ -3,11 +3,14 @@ functions that are basically slightly-tailored versions of set
 manipulation, designed for doing things with user group membership.
 '''
 
+import json
 import random
+from eliot import log_call
 from .. import LoggableChild
 from ..utils import list_duplicates, sanitize_dict
 
 
+@log_call
 def check_membership(groups, allowed, forbidden, log=None):
     '''False if any of 'groups' are in 'forbidden'.  Otherwise true if
     either: 'allowed' is empty or at least one member of 'groups' is
@@ -32,12 +35,14 @@ def check_membership(groups, allowed, forbidden, log=None):
     return False
 
 
+@log_call
 def _maybe_log_debug(message, log=None):
     if not log:
         return
     log.debug(message)
 
 
+@log_call
 def group_merge(self, groups_1, groups_2):
     '''Merge two groups, renaming collisions.
     '''
@@ -56,6 +61,7 @@ def group_merge(self, groups_1, groups_2):
     return grps
 
 
+@log_call
 def deduplicate_groups(grps):
     '''Rename groups with colliding names.
     '''
@@ -89,6 +95,7 @@ class LSSTAuthManager(LoggableChild):
         super().__init__(*args, **kwargs)
         self.authenticator = self.parent.authenticator
 
+    @log_call
     def get_fake_gid(self):
         '''Use if we have strict_ldap_groups off, to assign GIDs to names
         with no matching Unix GID.  Since these will not appear as filesystem
@@ -106,6 +113,7 @@ class LSSTAuthManager(LoggableChild):
         igrp = random.randint(grpbase, (grpbase + grprange))
         return igrp
 
+    @log_call
     def get_group_string(self):
         '''Convenience function for retrieving the group name-to-uid mapping
         list as a string suitable for passing to the spawned pod.
@@ -113,11 +121,13 @@ class LSSTAuthManager(LoggableChild):
         return ','.join(["{}:{}".format(x, self.group_map[x])
                          for x in self.group_map])
 
+    @log_call
     def get_pod_env(self):
         '''Return the authenticator-specific fields.
         '''
         return self.pod_env
 
+    @log_call
     def parse_auth_state(self):
         '''Take the auth_state attribute and extract:
             * UID
@@ -192,3 +202,6 @@ class LSSTAuthManager(LoggableChild):
                                         'GITHUB_ACCESS_TOKEN'])}
 
         return pd
+
+    def toJSON(self):
+        return json.dumps(self.dump())

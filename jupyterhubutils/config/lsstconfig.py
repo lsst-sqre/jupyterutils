@@ -1,6 +1,8 @@
-import json
 import logging
 import os
+import sys
+from eliot import to_file, log_call
+from eliot.stdlib import EliotHandler
 from jupyter_client.localinterfaces import public_ips
 from urllib.parse import urlparse
 from .. import Singleton
@@ -15,7 +17,12 @@ class LSSTConfig(metaclass=Singleton):
     '''
 
     def __init__(self, *args, **kwargs):
-        self.log = make_logger()
+        default_level = logging.WARNING
+        # we can't check this prior to the config existing...
+        debug = str_bool(os.getenv('DEBUG', False))
+        if debug:
+            default_level = logging.DEBUG
+        self._setup_logger(level=default_level)
         self.source = kwargs.pop('source', 'environment')
         if self.source != 'environment':
             raise ValueError(
@@ -24,9 +31,48 @@ class LSSTConfig(metaclass=Singleton):
         if self.source == 'environment':
             self.load_from_environment()
         if self.debug:
-            self.log.setLevel(logging.DEBUG)
+            # Reset default loglevel
+            rootlogger = logging.getLogger()
+            level = rootlogger.getEffectiveLevel()
+            if level > logging.DEBUG:
+                rootlogger.warn("Setting root logging level to DEBUG.")
+                rootlogger.setLevel(logging.DEBUG)
         self.create_derived_settings()
 
+    @log_call
+    def _setup_logger(self, level=logging.WARNING):
+        # In Python 3.8 we could use force=True to force the root logger
+        #  to override existing defaults
+        # Add our formats
+        fstr = '[%(levelname).1s %(asctime)s.%(msecs).03d'
+        fstr += ' %(module)s:%(funcName)s:%(lineno)d] %(message)s'
+        dstr = '%Y-%m-%d %H:%M:%S'
+        self.log_format = fstr
+        self.log_datefmt = dstr
+        self.log_level = level
+        rootlogger = logging.getLogger()
+        rootlogger.handlers = [EliotHandler()]
+        to_file(sys.stdout)
+        loggers = []
+        lrmld = logging.root.manager.loggerDict
+        loggers = loggers + [logging.getLogger(name) for name in lrmld]
+        rootlogger.warn("Removing all existing log handlers.")
+        for lgr in loggers:
+            rootlogger.warn("Removing log handlers for '{}'".format(lgr.name))
+            lgr.handlers = []
+        rootlogger.warn("Setting default log level to '{}'".format(level))
+        rootlogger.setLevel(level)
+        # There are some things we just don't want to log at DEBUG
+        chattycathies = ['kubernetes']
+        for c in chattycathies:
+            lgr = logging.getLogger(c)
+            if lgr.getEffectiveLevel() < logging.WARNING:
+                rootlogger.warn(
+                    "Forcing logger {} to WARNING level.".format(c))
+                lgr.setLevel(logging.WARNING)
+        self.log = make_logger(level=level)
+
+    @log_call
     def load_from_environment(self):
         '''Populate attributes from environment variables.
         '''
@@ -154,6 +200,7 @@ class LSSTConfig(metaclass=Singleton):
         self.authenticator_class = None
         self.spawner_class = None
 
+    @log_call
     def create_derived_settings(self):
         '''Create further settings from passed-in ones.
         '''
@@ -208,3 +255,6 @@ class LSSTConfig(metaclass=Singleton):
             if val:
                 sanitized[key] = str(val)
         return sanitized
+
+    def toJSON(self):
+        return self.dump()

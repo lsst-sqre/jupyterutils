@@ -1,6 +1,7 @@
 import datetime
 import os
 import requests
+from eliot import log_call
 from . import SingletonScanner
 
 
@@ -35,6 +36,7 @@ class Reaper(SingletonScanner):
         if self.registry_url.startswith('registry.hub.docker.com'):
             self.delete_tags = True
 
+    @log_call
     def _categorize_tags(self):
         tags = self.get_all_tags()  # Should wait for initial scan
         for t in tags:
@@ -50,6 +52,7 @@ class Reaper(SingletonScanner):
                     self._results_map[tag]["last_updated"].replace("Z", "UTC"),
                     "%Y-%m-%dT%H:%M:%S.%f%Z"))
 
+    @log_call
     def _select_victims(self):
         self._categorize_tags()
         reaptags = []
@@ -63,18 +66,21 @@ class Reaper(SingletonScanner):
         self.logger.debug("Images to reap: {}.".format(reapable))
         self.reapable = reapable
 
+    @log_call
     def report_reapable(self):
         '''Return a space-separated list of reapable images.
         '''
         self._select_victims()
         return " ".join(self.reapable.keys())
 
+    @log_call
     def reap(self):
         '''Select and delete images.
         '''
         self._select_victims()
         self._delete_from_repo()
 
+    @log_call
     def _delete_from_repo(self):
         tags = list(self.reapable.keys())
         if not tags:
@@ -111,6 +117,7 @@ class Reaper(SingletonScanner):
             if self.cachefile:
                 self._writecachefile()  # Remove deleted tags
 
+    @log_call
     def _delete_tags_from_docker_hub(self):
         # This is, of course, completely different from the published API
         #  https://github.com/docker/hub-feedback/issues/496
@@ -157,6 +164,7 @@ class Reaper(SingletonScanner):
         if self.cachefile:
             self._writecachefile()  # Remove deleted tags
 
+    @log_call
     def _authenticate_to_repo(self, resp):
         self.logger.warning("Authentication Required.")
         self.logger.warning("Headers: {}".format(resp.headers))

@@ -1,10 +1,11 @@
+import argo
+import json
 from .. import LoggableChild
 from .. import Singleton
 from kubespawner.clients import shared_client
 from kubernetes.config import load_incluster_config, load_kube_config
 from kubernetes.config.config_exception import ConfigException
 from argo.workflows.client import V1alpha1Api
-import argo.workflows.config
 
 
 class LSSTAPIManager(LoggableChild, metaclass=Singleton):
@@ -46,3 +47,6 @@ class LSSTAPIManager(LoggableChild, metaclass=Singleton):
               "wf_api": str(self.wf_api)
               }
         return ad
+
+    def toJSON(self):
+        return json.dumps(self.dump())

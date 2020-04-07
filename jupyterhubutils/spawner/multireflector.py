@@ -1,8 +1,7 @@
 # Inspired by, and based on, Adam Tilghman's Multi-Namespace work in
 #  https://github.com/jupyterhub/kubespawner/pull/218
-import datetime
-import pytz
 import time
+from eliot import log_call
 from kubernetes import watch
 from kubespawner.reflector import NamespacedResourceReflector
 from traitlets import Bool
@@ -28,6 +27,7 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
         """
         return resource.metadata.name
 
+    @log_call
     def _list_and_update(self):
         """
         Update current list of resources by doing a full fetch.
@@ -52,6 +52,7 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
         # return the resource version so we can hook up a watch
         return initial_resources.metadata.resource_version
 
+    @log_call
     def _watch_and_update(self):
         """
         Keeps the current list of resources up-to-date

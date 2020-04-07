@@ -7,6 +7,7 @@ import logging
 import os
 
 from collections import defaultdict
+from eliot.stdlib import EliotHandler
 
 
 def rreplace(s, old, new, occurrence):
@@ -39,19 +40,16 @@ def get_execution_namespace():
     return None
 
 
-def make_logger(name=__name__):
-    '''Create a logger with a specific output format.
+def make_logger(name=__name__, level=None):
+    '''Create a logger with LSST-appropriate characteristics.
     '''
     logger = logging.getLogger(name)
-    fstr = '[%(levelname).1s %(asctime)s.%(msecs).03d'
-    fstr += ' %(module)s:%(funcName)s:%(lineno)d] %(message)s'
-    dstr = '%Y-%m-%d %H:%M:%S'
-    ch = logging.StreamHandler()
-    fmt = logging.Formatter(fmt=fstr, datefmt=dstr)
-    ch.setFormatter(fmt)
-    # Remove default handlers, if any
-    logger.handlers = []
-    logger.addHandler(ch)
+    logger.propagate = False
+    if level is None:
+        level = logging.getLogger().getEffectiveLevel()
+    logger.setLevel(level)
+    logger.handlers = [EliotHandler()]
+    logger.info("Created logger object for class '{}'.".format(name))
     return logger
 
 

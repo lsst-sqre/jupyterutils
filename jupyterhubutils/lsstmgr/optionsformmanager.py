@@ -4,6 +4,7 @@ import datetime
 import jinja2
 import json
 from collections import OrderedDict
+from eliot import log_call
 from time import sleep
 from .. import SingletonScanner
 from .. import LoggableChild
@@ -16,6 +17,7 @@ class LSSTOptionsFormManager(LoggableChild):
     _scanner = None
     options_form_data = None
 
+    @log_call
     def get_options_form(self):
         '''Create an LSST Options Form from parent's config object.
         '''
@@ -76,11 +78,13 @@ class LSSTOptionsFormManager(LoggableChild):
         self.options_form_data = optform
         return optform
 
+    @log_call
     def resolve_tag(self, tag):
         '''Delegate to scanner to resolve convenience tags.
         '''
         return self._scanner.resolve_tag(tag)
 
+    @log_call
     def _sync_scan(self):
         scanner = self._scanner
         cfg = self.parent.config
@@ -103,6 +107,7 @@ class LSSTOptionsFormManager(LoggableChild):
                           "{}s.".format(max_delay))
                 raise RuntimeError(errstr)
 
+    @log_call
     def _make_sizemap(self):
         sizemap = OrderedDict()
         # For supported Python versions, dict is ordered anyway...
@@ -130,6 +135,7 @@ class LSSTOptionsFormManager(LoggableChild):
         # Clean up if list of sizes changed.
         self.sizemap = sizemap
 
+    @log_call
     def options_from_form(self, formdata=None):
         '''Get user selections.
         '''
@@ -156,3 +162,6 @@ class LSSTOptionsFormManager(LoggableChild):
               "sizemap": self.sizemap,
               "scanner": str(self._scanner)}
         return sd
+
+    def toJSON(self):
+        return json.dumps(self.dump())

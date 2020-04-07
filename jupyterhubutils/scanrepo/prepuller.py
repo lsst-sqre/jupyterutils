@@ -4,6 +4,7 @@ import logging
 import os
 import signal
 import time
+from eliot import log_call
 from kubernetes import client, config
 from jupyterhubutils.scanrepo import ScanRepo
 from threading import Thread
@@ -65,12 +66,14 @@ class Prepuller(object):
             signal.signal(signal.SIGALRM, self._timeout_handler)
             signal.alarm(self.args.timeout)
 
+    @log_call
     def _timeout_handler(self, signum, frame):
         self.logger.error(
             "Did not complete in %d s.  Terminating." % self.args.timeout)
         self._destroy_pods(selective=False)
         raise RuntimeError("Timed out")
 
+    @log_call
     def _destroy_pods(self, selective=False):
         '''Get a pod list and delete any that are still running if
         selective is False, or any in state "Succeeded" or "Failed"
@@ -81,6 +84,7 @@ class Prepuller(object):
         for podname in cleanup:
             self.delete_pod(podname)
 
+    @log_call
     def _get_deletion_list(self, selective=True):
         cleanup = []
         speclist = []
@@ -103,6 +107,7 @@ class Prepuller(object):
                 cleanup.append(podname)
         return cleanup
 
+    @log_call
     def update_images_from_repo(self):
         '''Scan the repo looking for images.
         '''
@@ -167,6 +172,7 @@ class Prepuller(object):
                 current_imgs.sort()
             self.images = current_imgs
 
+    @log_call
     def build_nodelist(self):
         '''Make a list of all schedulable nodes, respecting RESTRICT_*
         environment variables.
@@ -190,6 +196,7 @@ class Prepuller(object):
         logger.debug("Schedulable list: %s" % str(nodes))
         self.nodes = nodes
 
+    @log_call
     def reject_by_label(self, node):
         '''If node labels are set to restrict Lab spawn, reject nodes that
         are not suitable for Lab/Dask.
@@ -221,6 +228,7 @@ class Prepuller(object):
         logger.debug("Lab/Dask spawn not allowed for node '%s'" % name)
         return True
 
+    @log_call
     def build_pod_specs(self):
         '''Build a dict of Pod specs by node, each node having a list of
         specs.
@@ -233,6 +241,7 @@ class Prepuller(object):
         self.pod_specs = specs
         self.logger.debug("Specs: %s" % str(self.pod_specs))
 
+    @log_call
     def _build_pod_spec(self, img, node):
         spec = client.V1PodSpec(
             containers=[
@@ -250,18 +259,21 @@ class Prepuller(object):
         )
         return spec
 
+    @log_call
     def _podname_from_image(self, img):
         iname = '-'.join(img.split('/')[-2:])
         iname = iname.replace(':', '-')
         iname = iname.replace('_', '-')
         return iname
 
+    @log_call
     def clean_completed_pods(self):
         '''Get a pod list and delete any that are in the speclist and have
         already run to completion.
         '''
         self._destroy_pods(selective=True)
 
+    @log_call
     def start_single_pod(self, spec):
         '''Run a pod, with a single container, on a particular node.
         (Assuming that the pod is itself tied to a node in the pod spec.)
@@ -281,12 +293,14 @@ class Prepuller(object):
         podname = made_pod.metadata.name
         return podname
 
+    @log_call
     def _derive_pod_name(self, spec):
         '''Pod name is based on image and node.
         '''
         return ("pp-" + self._podname_from_image(spec.containers[0].image) +
                 "-" + spec.node_name.split('-')[-1])
 
+    @log_call
     def run_pods(self):
         '''Run pods for all nodes.  Parallelize across nodes.
         '''
@@ -301,6 +315,7 @@ class Prepuller(object):
             self.logger.debug("Wait for thread '%s' to complete" % thd.name)
             thd.join()
 
+    @log_call
     def run_pods_for_node(self, node, speclist):
         '''Execute pods one at a time, so we don't overwhelm I/O.
         Execute this method in parallel across all nodes for best
@@ -315,6 +330,7 @@ class Prepuller(object):
             podname = self.start_single_pod(spec)
             self.wait_for_pod(podname)
 
+    @log_call
     def wait_for_pod(self, podname, delay=1, max_tries=3600):
         '''Wait for a particular pod to go into phase "Succeeded" or
         "Failed", and then delete the pod.
@@ -342,6 +358,7 @@ class Prepuller(object):
             time.sleep(delay)
             tries = tries + 1
 
+    @log_call
     def delete_pod(self, podname):
         '''Delete a named pod.
         '''

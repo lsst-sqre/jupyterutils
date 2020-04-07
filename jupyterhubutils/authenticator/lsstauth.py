@@ -1,6 +1,8 @@
 '''This is a mixin class for authenticators for common LSST functionality.
 '''
 import asyncio
+import json
+from eliot import log_call
 from jupyterhub.auth import Authenticator
 from .. import LSSTMiddleManager
 from ..config import LSSTConfig
@@ -30,6 +32,7 @@ class LSSTAuthenticator(Authenticator):
                                           authenticator=self,
                                           config=LSSTConfig())
 
+    @log_call
     def resolve_cilogon(self, membership):
         '''Shared between CILogon and JWT (which uses CILogon as its backing
         store) and thus appearing here.  Returns a uid, groupmap pair
@@ -59,6 +62,10 @@ class LSSTAuthenticator(Authenticator):
               }
         return ad
 
+    def toJSON(self):
+        return json.dumps(self.dump())
+
+    @log_call
     async def refresh_user(self, user, handler=None):
         '''On each refresh_user, clear the options form cache, thus
         forcing it to be rebuilt on next display.  Otherwise it is built once
