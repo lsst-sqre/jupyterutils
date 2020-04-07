@@ -1,6 +1,7 @@
 import datetime
 import threading
 import time
+from eliot import log_call
 from .scanrepo import ScanRepo
 from ..singleton import Singleton
 
@@ -37,6 +38,7 @@ class SingletonScanner(ScanRepo, metaclass=Singleton):
         self.logger.info("Starting background scan.")
         thd.start()
 
+    @log_call
     def scan(self):
         '''Execute repo scan.
         '''
@@ -75,6 +77,7 @@ class SingletonScanner(ScanRepo, metaclass=Singleton):
             self.last_updated = now
             self.scanning = False
 
+    @log_call
     def _scan_if_needed(self):
         now = datetime.datetime.utcnow()
         max_age = datetime.timedelta(seconds=self.max_cache_age)
@@ -97,30 +100,35 @@ class SingletonScanner(ScanRepo, metaclass=Singleton):
                 self.scan()
             self.logger.debug("Exiting _scan_if_needed() wait loop.")
 
+    @log_call
     def get_data(self):
         '''Return repo data.
         '''
         self._scan_if_needed()
         return self.data
 
+    @log_call
     def get_all_tags(self):
         '''Return all tags in repo.
         '''
         self._scan_if_needed()
         return self._all_tags
 
+    @log_call
     def get_all_scan_results(self):
         '''Return results from repository scan as dict.
         '''
         self._scan_if_needed()
         return self._results_map
 
+    @log_call
     def extract_image_info(self):
         '''Get info for all images.
         '''
         self._scan_if_needed()
         return super().extract_image_info()
 
+    @log_call
     def report(self):
         '''Report results of scan.
         '''

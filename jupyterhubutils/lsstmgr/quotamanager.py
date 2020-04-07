@@ -1,5 +1,6 @@
 import json
 import os
+from eliot import log_call
 from kubernetes.client import V1ResourceQuotaSpec
 from kubernetes.client.rest import ApiException
 from kubernetes import client
@@ -13,6 +14,7 @@ class LSSTQuotaManager(LoggableChild):
     custom_resources = {}
     resourcemap = None
 
+    @log_call
     def define_resource_quota_spec(self):
         '''We're going to return a resource quota spec that checks whether we
         have a custom resource map and uses that information.  If we do not
@@ -57,6 +59,7 @@ class LSSTQuotaManager(LoggableChild):
                   "limits.memory": total_mem})
         self.quota = qs.hard
 
+    @log_call
     def _set_custom_user_resources(self):
         '''Create custom resource definitions for user.
         '''
@@ -100,6 +103,7 @@ class LSSTQuotaManager(LoggableChild):
                         "for user '{}'".format(uname))
                     self.custom_resources = resources
 
+    @log_call
     def _create_resource_map(self):
         resource_file = self.parent.config.resource_map
         if not os.path.exists(resource_file):
@@ -112,6 +116,7 @@ class LSSTQuotaManager(LoggableChild):
         self.resourcemap = resmap
 
     # Brought in from namespacedkubespawner
+    @log_call
     def ensure_namespaced_resource_quota(self, quotaspec):
         '''Create K8s quota object if necessary.
         '''
@@ -140,6 +145,7 @@ class LSSTQuotaManager(LoggableChild):
                 self.log.debug("Resourcequota '%r' " % quota +
                                "already exists in '%s'." % namespace)
 
+    @log_call
     def destroy_namespaced_resource_quota(self):
         '''Destroys the Kubernetes namespaced resource quota.
         You don't usually have to call this, since it will get
@@ -161,3 +167,6 @@ class LSSTQuotaManager(LoggableChild):
               "custom_resources": self.custom_resources,
               "resourcemap": self.resourcemap}
         return qd
+
+    def toJSON(self):
+        return json.dumps(self.dump())

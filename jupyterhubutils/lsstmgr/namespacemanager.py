@@ -1,7 +1,9 @@
 '''Class to provide namespace manipulation.
 '''
 
+import json
 import time
+from eliot import log_call
 from kubernetes.client.rest import ApiException
 from kubernetes import client
 from .. import LoggableChild
@@ -15,9 +17,11 @@ class LSSTNamespaceManager(LoggableChild):
     namespace = None
     service_account = None  # Account for pod to run as
 
+    @log_call
     def set_namespace(self, namespace):
         self.namespace = namespace
 
+    @log_call
     def ensure_namespace(self):
         '''Here we make sure that the namespace exists, creating it if
         it does not.  That requires a ClusterRole that can list and create
@@ -64,6 +68,7 @@ class LSSTNamespaceManager(LoggableChild):
             qm.ensure_namespaced_resource_quota(qm.quota)
         self.log.debug("Namespace resources ensured.")
 
+    @log_call
     def define_namespaced_account_objects(self):
         namespace = self.namespace
         username = self.parent.user.escaped_name
@@ -125,6 +130,7 @@ class LSSTNamespaceManager(LoggableChild):
         )
         return svcacct, role, rolebinding
 
+    @log_call
     def ensure_namespaced_service_account(self):
         # Create a service account with role and rolebinding to allow it
         #  to manipulate resources in the namespace.
@@ -177,6 +183,7 @@ class LSSTNamespaceManager(LoggableChild):
                 self.log.info("Rolebinding '%s' " % account +
                               "already exists in '%s'." % namespace)
 
+    @log_call
     def wait_for_namespace(self, timeout=30):
         '''Wait for namespace to be created.'''
         namespace = self.namespace
@@ -196,6 +203,7 @@ class LSSTNamespaceManager(LoggableChild):
             "Namespace '{}' was not created in {} seconds!".format(namespace,
                                                                    timeout))
 
+    @log_call
     def maybe_delete_namespace(self):
         '''Here we try to delete the namespace.  If it has no non-dask
         running pods, and it's not the default namespace, we can delete it."
@@ -217,6 +225,7 @@ class LSSTNamespaceManager(LoggableChild):
         self.parent.api.delete_namespace(namespace)
         return True
 
+    @log_call
     def _check_pods(self, items):
         namespace = self.namespace
         for i in items:
@@ -238,6 +247,7 @@ class LSSTNamespaceManager(LoggableChild):
         # FIXME check on workflows as well.
         return True
 
+    @log_call
     def destroy_namespaced_resource_quota(self):
         '''Remove quotas from namespace.
         You don't usually have to call this, since it will get
@@ -250,6 +260,7 @@ class LSSTNamespaceManager(LoggableChild):
         self.log.info("Deleting resourcequota '%s'" % qname)
         api.delete_namespaced_resource_quota(qname, namespace, dopts)
 
+    @log_call
     def delete_namespaced_service_account_objects(self):
         '''Remove service accounts, roles, and rolebindings from namespace.
         You don't usually have to call this, since they will get
@@ -283,3 +294,6 @@ class LSSTNamespaceManager(LoggableChild):
               "service_account": self.service_account,
               "parent": str(self.parent)}
         return nd
+
+    def toJSON(self):
+        return json.dumps(self.dump())

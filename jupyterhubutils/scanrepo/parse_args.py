@@ -1,8 +1,10 @@
 import argparse
 import json
 from ..config import LSSTConfig
+from eliot import log_call
 
 
+@log_call
 def parse_args(cfg=LSSTConfig(),
                desc="Get list of Lab Images for display or prepulling",
                component="scanner"):
