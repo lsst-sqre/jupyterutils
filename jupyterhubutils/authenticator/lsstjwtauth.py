@@ -1,7 +1,7 @@
 '''LSST Authenticator to use JWT token present in request headers.
 '''
 import asyncio
-from eliot import log_call
+from eliot import log_call, start_action
 from jwtauthenticator.jwtauthenticator import JSONWebTokenAuthenticator
 from .lsstauth import LSSTAuthenticator
 from .lsstjwtloginhandler import LSSTJWTLoginHandler
