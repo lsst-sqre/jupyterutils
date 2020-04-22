@@ -6,7 +6,7 @@ This module exports `NamespacedKubeSpawner` class, which is the spawner
 implementation that should be used by JupyterHub.
 '''
 
-from eliot import log_call
+from eliot import start_action
 from jupyterhub.utils import exponential_backoff
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -66,14 +66,14 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         #  initialization loop
         self.log.debug("MultiNamespaceSpawner initialized.")
 
-    @log_call
     def auth_state_hook(self, spawner, auth_state):
-        # Start the watchers.
-        # Restart pod/event watcher
-        self.log.debug("{} auth_state_hook firing.".format(__name__))
-        if self.events_enabled:
-            self._start_watching_events(replace=True)
-        # Do not call superclass
+        with start_action(action_type="auth_state_hook"):
+            # Start the watchers.
+            # Restart pod/event watcher
+            self.log.debug("{} auth_state_hook firing.".format(__name__))
+            if self.events_enabled:
+                self._start_watching_events(replace=True)
+            # Do not call superclass
 
     @gen.coroutine
     def poll(self):
@@ -90,36 +90,38 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         just Falsy, to determine that the pod is still running.
         '''
         # have to wait for first load of data before we have a valid answer
-        if not self.pod_reflector.first_load_future.done():
-            yield self.pod_reflector.first_load_future
-        data = self.pod_reflector.pods.get((self.namespace, self.pod_name),
-                                           None)
-        if data is not None:
-            if data.status.phase == 'Pending':
+        with start_action(action_type="poll"):
+            if not self.pod_reflector.first_load_future.done():
+                yield self.pod_reflector.first_load_future
+            data = self.pod_reflector.pods.get((self.namespace, self.pod_name),
+                                               None)
+            if data is not None:
+                if data.status.phase == 'Pending':
+                    return None
+                ctr_stat = data.status.container_statuses
+                if ctr_stat is None:  # No status, no container (we hope)
+                    # This seems to happen when a pod is idle-culled.
+                    return 1
+                for c in ctr_stat:
+                    # return exit code if notebook container has terminated
+                    if c.name == 'notebook':
+                        if c.state.terminated:
+                            # call self.stop to delete the pod
+                            if self.delete_stopped_pods:
+                                yield self.stop(now=True)
+                            return c.state.terminated.exit_code
+                        break
+                # None means pod is running or starting up
                 return None
-            ctr_stat = data.status.container_statuses
-            if ctr_stat is None:  # No status, no container (we hope)
-                # This seems to happen when a pod is idle-culled.
-                return 1
-            for c in ctr_stat:
-                # return exit code if notebook container has terminated
-                if c.name == 'notebook':
-                    if c.state.terminated:
-                        # call self.stop to delete the pod
-                        if self.delete_stopped_pods:
-                            yield self.stop(now=True)
-                        return c.state.terminated.exit_code
-                    break
-            # None means pod is running or starting up
-            return None
-        # pod doesn't exist or has been deleted
-        return 1
+            # pod doesn't exist or has been deleted
+            return 1
 
-    @log_call
     @gen.coroutine
     def _start(self):
         '''Start the user's pod.
         '''
+        # Context issues with logging.  FIXME.
+        # with start_action(action_type="_start"):
         retry_times = 4  # Ad-hoc
         pod = yield self.get_pod_manifest()
         if self.modify_pod_hook:
@@ -138,7 +140,8 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
                     self.log.exception("Failed for %s", pod.to_str())
                     raise
                 self.log.info(
-                    'Found existing pod %s, attempting to kill', self.pod_name)
+                    'Found existing pod %s, attempting to kill',
+                    self.pod_name)
                 # TODO: this should show up in events
                 yield self.stop(now=True)
 
@@ -167,13 +170,14 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         except TimeoutError:
             if self.pod_name not in self.pod_reflector.pods:
                 # if pod never showed up at all,
-                # restart the pod reflector which may have become disconnected.
+                # restart the pod reflector which may have
+                # become disconnected.
                 self.log.error(
-                    "Pod %s never showed up in reflector;" % self.pod_name +
-                    " restarting pod reflector."
+                    "Pod {} never showed up in reflector; restarting " +
+                    "pod reflector.".format(self.pod_name)
                 )
                 self._start_watching_pods(replace=True)
-            raise
+                raise
 
         pod = self.pod_reflector.pods[(self.namespace, self.pod_name)]
         self.pod_id = pod.metadata.uid
@@ -191,47 +195,48 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
             )
         return (pod.status.pod_ip, self.port)
 
-    @log_call
     @gen.coroutine
     def stop(self, now=False):
-        delete_options = client.V1DeleteOptions()
+        with start_action(action_type="stop"):
+            delete_options = client.V1DeleteOptions()
 
-        if now:
-            grace_seconds = 0
-        else:
-            # Give it some time, but not the default (which is 30s!)
-            grace_seconds = self.delete_grace_period
-
-        delete_options.grace_period_seconds = grace_seconds
-        self.log.info("Deleting pod %s", self.pod_name)
-        try:
-            yield self.asynchronize(
-                self.api.delete_namespaced_pod,
-                name=self.pod_name,
-                namespace=self.namespace,
-                body=delete_options,
-                grace_period_seconds=grace_seconds,
-            )
-        except ApiException as e:
-            if e.status == 404:
-                self.log.warning(
-                    "No pod %s to delete. Assuming already deleted.",
-                    self.pod_name,
-                )
+            if now:
+                grace_seconds = 0
             else:
+                # Give it some time, but not the default (which is 30s!)
+                grace_seconds = self.delete_grace_period
+
+            delete_options.grace_period_seconds = grace_seconds
+            self.log.info("Deleting pod %s", self.pod_name)
+            try:
+                yield self.asynchronize(
+                    self.api.delete_namespaced_pod,
+                    name=self.pod_name,
+                    namespace=self.namespace,
+                    body=delete_options,
+                    grace_period_seconds=grace_seconds,
+                )
+            except ApiException as e:
+                if e.status == 404:
+                    self.log.warning(
+                        "No pod %s to delete. Assuming already deleted.",
+                        self.pod_name,
+                    )
+                else:
+                    raise
+            try:
+                yield exponential_backoff(
+                    lambda: self.pod_reflector.pods.get((self.namespace,
+                                                         self.pod_name),
+                                                        None) is
+                    None,
+                    'pod/%s did not disappear in %s seconds!' % (
+                        self.pod_name, self.start_timeout),
+                    timeout=self.start_timeout,
+                )
+            except TimeoutError:
+                self.log.error(
+                    "Pod %s did not disappear, " % self.pod_name +
+                    "restarting pod reflector")
+                self._start_watching_pods(replace=True)
                 raise
-        try:
-            yield exponential_backoff(
-                lambda: self.pod_reflector.pods.get((self.namespace,
-                                                     self.pod_name), None) is
-                None,
-                'pod/%s did not disappear in %s seconds!' % (
-                    self.pod_name, self.start_timeout),
-                timeout=self.start_timeout,
-            )
-        except TimeoutError:
-            self.log.error(
-                "Pod %s did not disappear, " % self.pod_name +
-                "restarting pod reflector")
-            self._start_watching_pods(replace=True)
-            raise
