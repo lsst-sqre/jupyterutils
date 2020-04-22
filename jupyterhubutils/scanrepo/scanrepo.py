@@ -8,7 +8,7 @@ import semver
 import urllib.parse
 import urllib.request
 
-from eliot import log_call
+from eliot import start_action
 from ..utils import make_logger
 
 
@@ -107,65 +107,65 @@ class ScanRepo(object):
         if self._session:
             self._session.close()
 
-    @log_call
     def extract_image_info(self):
         '''Build image name list and image description list.
         '''
-        cs = []
-        if (self.recommended and "recommended" in self.data):
-            cs.extend(self.data["recommended"])
-        for k in ["experimental", "daily", "weekly", "release"]:
-            if k in self.data:
-                cs.extend(self.data[k])
-        ldescs = []
-        for c in cs:
-            tag = c["name"]
-            ld = c.get("description")
-            if not ld:
-                ld = self._describe_tag(tag)
-            ldescs.append(ld)
-        ls = [self.owner + "/" + self.name + ":" + x["name"] for x in cs]
-        return ls, ldescs
+        with start_action(action_type="extract_image_info"):
+            cs = []
+            if (self.recommended and "recommended" in self.data):
+                cs.extend(self.data["recommended"])
+            for k in ["experimental", "daily", "weekly", "release"]:
+                if k in self.data:
+                    cs.extend(self.data[k])
+            ldescs = []
+            for c in cs:
+                tag = c["name"]
+                ld = c.get("description")
+                if not ld:
+                    ld = self._describe_tag(tag)
+                ldescs.append(ld)
+            ls = [self.owner + "/" + self.name + ":" + x["name"] for x in cs]
+            return ls, ldescs
 
-    @log_call
     def _read_cachefile(self):
-        fn = self.cachefile
-        try:
-            with open(fn) as f:
-                data = json.load(f)
-        except Exception as exc:
-            self.logger.error(
-                "Failed to load cachefile '{}'; must rescan".format(fn))
-            self.logger.error("Error: {}".format(exc))
-            return
-        self.logger.debug("Loaded cachefile {}".format(fn))
-        nm = self._name_to_manifest
-        rm = self._results_map
-        for tag in data.keys():
-            ihash = data[tag].get("hash")
-            ilayers = data[tag].get("layers")
-            updated = None
-            updatedstr = data[tag].get("updated")
-            if updatedstr:
-                updated = self._convert_time(updatedstr)
-            if ihash and updated:
-                if (tag not in nm or (nm[tag]["updated"] < updated)):
-                    nm[tag] = {"hash": ihash,
-                               "updated": updated}
-                    if ilayers:
-                        nm[tag]["layers"] = ilayers
-                if tag not in rm:
-                    rm[tag] = {"last_updated": updatedstr,
-                               "name": tag}
-                else:
-                    l_updated = self._convert_time(rm[tag]["last_updated"])
-                    if l_updated < updated:
+        with start_action(action_type="_read_cachefile"):
+            fn = self.cachefile
+            try:
+                with open(fn) as f:
+                    data = json.load(f)
+            except Exception as exc:
+                self.logger.error(
+                    "Failed to load cachefile '{}'; must rescan".format(fn))
+                self.logger.error("Error: {}".format(exc))
+                return
+            self.logger.debug("Loaded cachefile {}".format(fn))
+            nm = self._name_to_manifest
+            rm = self._results_map
+            for tag in data.keys():
+                ihash = data[tag].get("hash")
+                ilayers = data[tag].get("layers")
+                updated = None
+                updatedstr = data[tag].get("updated")
+                if updatedstr:
+                    updated = self._convert_time(updatedstr)
+                if ihash and updated:
+                    if (tag not in nm or (nm[tag]["updated"] < updated)):
+                        nm[tag] = {"hash": ihash,
+                                   "updated": updated}
+                        if ilayers:
+                            nm[tag]["layers"] = ilayers
+                    if tag not in rm:
                         rm[tag] = {"last_updated": updatedstr,
                                    "name": tag}
+                    else:
+                        l_updated = self._convert_time(rm[tag]["last_updated"])
+                        if l_updated < updated:
+                            rm[tag] = {"last_updated": updatedstr,
+                                       "name": tag}
 
-    @log_call
     def _describe_tag(self, tag):
         # New-style tags have underscores separating components.
+        # Don't log it; way too noisy.
         ld = tag  # Default description is just the tag name
         components = None
         if tag.find('_') != -1:
@@ -232,85 +232,86 @@ class ScanRepo(object):
                 ld = "Experimental %s" % rest
         return ld
 
-    @log_call
     def resolve_tag(self, tag):
         '''Resolve a tag (used for "recommended" or "latest*").
         '''
-        mfest = self._name_to_manifest.get(tag)
-        if not mfest:
-            self.logger.debug("Did not find manifest for '{}'".format(tag))
-            return None
-        hash = mfest.get("hash")
-        self.logger.debug("Tag '{}' hash -> '{}'".format(tag, hash))
-        if not hash:
-            return None
-        for k in self._name_to_manifest:
-            if (k.startswith("recommended") or k.startswith("latest")):
-                continue
-            if self._name_to_manifest[k].get("hash") == hash:
-                self.logger.debug("Found matching hash for tag '{}'".format(k))
-                return k
+        with start_action(action_type="resolve_tag"):
+            mfest = self._name_to_manifest.get(tag)
+            if not mfest:
+                self.logger.debug("Did not find manifest for '{}'".format(tag))
+                return None
+            hash = mfest.get("hash")
+            self.logger.debug("Tag '{}' hash -> '{}'".format(tag, hash))
+            if not hash:
+                return None
+            for k in self._name_to_manifest:
+                if (k.startswith("recommended") or k.startswith("latest")):
+                    continue
+                if self._name_to_manifest[k].get("hash") == hash:
+                    self.logger.debug(
+                        "Found matching hash for tag '{}'".format(k))
+                    return k
 
-    @log_call
     def _data_to_json(self):
-        return json.dumps(self.data, sort_keys=True, indent=4,
-                          default=self._serialize_datetime)
+        with start_action(action_type="_data_to_json"):
+            return json.dumps(self.data, sort_keys=True, indent=4,
+                              default=self._serialize_datetime)
 
-    @log_call
     def _namemap_to_json(self):
-        modmap = {}
-        nm = self._name_to_manifest
-        rm = self._results_map
-        for k in nm:
-            dt = nm[k].get("updated")
-            dstr = None
-            if dt:
-                dstr = self._serialize_datetime(dt)
-            else:
-                dstr = rm[k].get("last_updated")
-            ihash = nm[k].get("hash")
-            if ihash and dstr:
-                modmap[k] = {"updated": dstr,
-                             "hash": ihash}
-        return json.dumps(modmap, sort_keys=True, indent=4)
+        with start_action(action_type="_namemap_to_json"):
+            modmap = {}
+            nm = self._name_to_manifest
+            rm = self._results_map
+            for k in nm:
+                dt = nm[k].get("updated")
+                dstr = None
+                if dt:
+                    dstr = self._serialize_datetime(dt)
+                else:
+                    dstr = rm[k].get("last_updated")
+                ihash = nm[k].get("hash")
+                if ihash and dstr:
+                    modmap[k] = {"updated": dstr,
+                                 "hash": ihash}
+                return json.dumps(modmap, sort_keys=True, indent=4)
 
-    @log_call
     def _serialize_datetime(self, o):
+        # Don't log this; it's way too noisy.
         if isinstance(o, datetime.datetime):
             dstr = o.__str__().replace(' ', 'T')
             if dstr[-1].isdigit():
                 dstr += "Z"
             return dstr
 
-    @log_call
     def report(self):
         '''Print the tag data.
         '''
-        if self.json:
-            print(self._data_to_json())
-        else:
-            ls, ldescs = self.extract_image_info()
-            ldstr = ",".join(ldescs)
-            lstr = ",".join(ls)
-            print("# Environment variables for Jupyter Lab containers")
-            print("LAB_CONTAINER_NAMES=\'%s\'" % lstr)
-            print("LAB_CONTAINER_DESCS=\'%s\'" % ldstr)
-            print("export LAB_CONTAINER_NAMES LAB_CONTAINER_DESCS")
+        with start_action(action_type="report"):
+            if self.json:
+                print(self._data_to_json())
+            else:
+                ls, ldescs = self.extract_image_info()
+                ldstr = ",".join(ldescs)
+                lstr = ",".join(ls)
+                print("# Environment variables for Jupyter Lab containers")
+                print("LAB_CONTAINER_NAMES=\'%s\'" % lstr)
+                print("LAB_CONTAINER_DESCS=\'%s\'" % ldstr)
+                print("export LAB_CONTAINER_NAMES LAB_CONTAINER_DESCS")
 
-    @log_call
     def get_data(self):
         '''Return the tag data.
         '''
-        return self.data
+        with start_action(action_type="get_data"):
+            return self.data
 
-    @log_call
     def get_all_tags(self):
         '''Return all tags in the repository (sorted by last_updated).
         '''
-        return self._all_tags
+        with start_action(action_type="get_all_tags"):
+            return self._all_tags
 
-    @log_call
     def _get_url(self, **kwargs):
+        # Too noisy to log.
         params = None
         resp = None
         url = self.url
@@ -323,220 +324,227 @@ class ScanRepo(object):
         page = resp.read()
         return page
 
-    @log_call
     def scan(self):
         '''Perform the repository scan.
         '''
-        url = self.url
-        self.logger.debug("Beginning repo scan of '{}'.".format(url))
-        results = []
-        page = 1
-        resp_bytes = None
-        while True:
-            try:
-                resp_bytes = self._get_url(page=page)
-            except Exception as e:
-                message = "Failure retrieving %s: %s" % (url, str(e))
-                if resp_bytes:
-                    message += " [ data: %s ]" % (
-                        str(resp_bytes.decode("utf-8")))
-                raise ValueError(message)
-            resp_text = resp_bytes.decode("utf-8")
-            try:
-                j = json.loads(resp_text)
-            except ValueError:
-                raise ValueError("Could not decode '%s' -> '%s' as JSON" %
-                                 (url, str(resp_text)))
-            results.extend(j["results"])
-            if "next" not in j or not j["next"]:
-                break
-            page = page + 1
-        self._results = results
-        self._update_results_map(results)
-        self._map_names_to_manifests()
-        self._reduce_results()
+        with start_action(action_type="scan"):
+            url = self.url
+            self.logger.debug("Beginning repo scan of '{}'.".format(url))
+            results = []
+            page = 1
+            resp_bytes = None
+            while True:
+                try:
+                    resp_bytes = self._get_url(page=page)
+                except Exception as e:
+                    message = "Failure retrieving %s: %s" % (url, str(e))
+                    if resp_bytes:
+                        message += " [ data: %s ]" % (
+                            str(resp_bytes.decode("utf-8")))
+                    raise ValueError(message)
+                resp_text = resp_bytes.decode("utf-8")
+                try:
+                    j = json.loads(resp_text)
+                except ValueError:
+                    raise ValueError("Could not decode '%s' -> '%s' as JSON" %
+                                     (url, str(resp_text)))
+                results.extend(j["results"])
+                if "next" not in j or not j["next"]:
+                    break
+                page = page + 1
+            self._results = results
+            self._update_results_map(results)
+            self._map_names_to_manifests()
+            self._reduce_results()
 
-    @log_call
     def _update_results_map(self, results):
-        rm = self._results_map
-        for res in results:
-            name = res["name"]
-            if name not in rm:
-                rm[name] = {}
-            rm[name].update(res)
+        with start_action(action_type="_update_results_map"):
+            rm = self._results_map
+            for res in results:
+                name = res["name"]
+                if name not in rm:
+                    rm[name] = {}
+                rm[name].update(res)
 
-    @log_call
     def _map_names_to_manifests(self):
-        results = self._results_map
-        namemap = self._name_to_manifest
-        check_names = []
-        for tag in results:
-            tstamp = self._convert_time(results[tag]["last_updated"])
-            if not namemap.get(tag):
-                namemap[tag] = {
-                    "layers": None,
-                    "updated": tstamp,
-                    "hash": None
-                }
-            if tstamp <= namemap[tag]["updated"] and namemap[tag]["hash"]:
-                # We have a manifest
-                # Update results map with hash
-                results[tag]["hash"] = namemap[tag]["hash"]
-                continue
-            self.logger.debug("Adding {} to check_names.".format(tag))
-            check_names.append(tag)
-        if not check_names:
-            self.logger.debug("All images have current hash.")
-            return
-        baseurl = self.registry_url
-        url = baseurl + "manifests/recommended"
-        i_resp = requests.head(url)
-        authtok = None
-        sc = i_resp.status_code
-        if sc == 401:
-            self.logger.debug("Getting token to retrieve layer lists.")
-            magicheader = i_resp.headers['Www-Authenticate']
-            if magicheader[:7] == "Bearer ":
-                hd = {}
-                hl = magicheader[7:].split(",")
-                for hn in hl:
-                    il = hn.split("=")
-                    kk = il[0]
-                    vv = il[1].replace('"', "")
-                    hd[kk] = vv
-                if (not hd or "realm" not in hd or "service" not in hd
-                        or "scope" not in hd):
-                    return None
-                endpoint = hd["realm"]
-                del hd["realm"]
-                tresp = requests.get(endpoint, params=hd, json=True)
-                jresp = tresp.json()
-                authtok = jresp.get("token")
-        elif sc != 200:
-            self.logger.warning("GET %s -> %d" % (url, sc))
-        # https://docs.docker.com/registry/spec/api/ , "Deleting An Image"
-        # Yep, I think that's the only place it tells you that you need
-        #  this magic header to get the digest hash.
-        headers = {
-            "Accept": "application/vnd.docker.distribution.manifest.v2+json"}
-        if authtok:
-            headers.update({"Authorization": "Bearer {}".format(authtok)})
-        for name in check_names:
-            resp = requests.head(baseurl + "manifests/{}".format(name),
-                                 headers=headers)
-            ihash = resp.headers["Docker-Content-Digest"]
-            namemap[name]["hash"] = ihash
-            results[name]["hash"] = ihash
-            dstr = results[name]["last_updated"]
-            if dstr:
-                dt = self._convert_time(dstr)
-                namemap[name]["updated"] = dt
-        self._name_to_manifest.update(namemap)
-        if self.cachefile:
-            self.logger.debug("Writing cache file.")
-            try:
-                self._writecachefile()
-            except Exception as exc:
-                self.log.error("Failed to write cache file: {}".format(exc))
-            # We're up to date.
+        with start_action(action_type="_map_names_to_manifests"):
+            results = self._results_map
+            namemap = self._name_to_manifest
+            check_names = []
+            for tag in results:
+                tstamp = self._convert_time(results[tag]["last_updated"])
+                if not namemap.get(tag):
+                    namemap[tag] = {
+                        "layers": None,
+                        "updated": tstamp,
+                        "hash": None
+                    }
+                if tstamp <= namemap[tag]["updated"] and namemap[tag]["hash"]:
+                    # We have a manifest
+                    # Update results map with hash
+                    results[tag]["hash"] = namemap[tag]["hash"]
+                    continue
+                self.logger.debug("Adding {} to check_names.".format(tag))
+                check_names.append(tag)
+            if not check_names:
+                self.logger.debug("All images have current hash.")
+                return
+            baseurl = self.registry_url
+            url = baseurl + "manifests/recommended"
+            i_resp = requests.head(url)
+            authtok = None
+            sc = i_resp.status_code
+            if sc == 401:
+                self.logger.debug("Getting token to retrieve layer lists.")
+                magicheader = i_resp.headers['Www-Authenticate']
+                if magicheader[:7] == "Bearer ":
+                    hd = {}
+                    hl = magicheader[7:].split(",")
+                    for hn in hl:
+                        il = hn.split("=")
+                        kk = il[0]
+                        vv = il[1].replace('"', "")
+                        hd[kk] = vv
+                    if (not hd or "realm" not in hd or "service" not in hd
+                            or "scope" not in hd):
+                        return None
+                    endpoint = hd["realm"]
+                    del hd["realm"]
+                    tresp = requests.get(endpoint, params=hd, json=True)
+                    jresp = tresp.json()
+                    authtok = jresp.get("token")
+            elif sc != 200:
+                self.logger.warning("GET %s -> %d" % (url, sc))
+                # https://docs.docker.com/registry/spec/api/ ,
+                # "Deleting An Image"
+                # Yep, I think that's the only place it tells you that you need
+                #  this magic header to get the digest hash.
+                headers = {
+                    "Accept": ("application/vnd.docker.distribution." +
+                               "manifest.v2+json")}
+                if authtok:
+                    headers.update(
+                        {"Authorization": "Bearer {}".format(authtok)})
+                    for name in check_names:
+                        resp = requests.head(baseurl + "manifests/{}".format(
+                            name),
+                            headers=headers)
+                        ihash = resp.headers["Docker-Content-Digest"]
+                        namemap[name]["hash"] = ihash
+                        results[name]["hash"] = ihash
+                    dstr = results[name]["last_updated"]
+                    if dstr:
+                        dt = self._convert_time(dstr)
+                        namemap[name]["updated"] = dt
+                self._name_to_manifest.update(namemap)
+                if self.cachefile:
+                    self.logger.debug("Writing cache file.")
+                    try:
+                        self._writecachefile()
+                    except Exception as exc:
+                        self.log.error(
+                            "Failed to write cache file: {}".format(exc))
+                        # We're up to date.
 
-    @log_call
     def _writecachefile(self):
-        if self.cachefile:
-            try:
-                with open(self.cachefile, 'w') as f:
-                    f.write(self._namemap_to_json())
-            except Exception as exc:
-                self.logger.error(
-                    "Could not write to {}: {}".format(self.cachefile, exc))
+        with start_action(action_type="_writecachefile"):
+            if self.cachefile:
+                try:
+                    with open(self.cachefile, 'w') as f:
+                        f.write(self._namemap_to_json())
+                except Exception as exc:
+                    self.logger.error(
+                        "Could not write to {}: {}".format(
+                            self.cachefile, exc))
 
-    @log_call
     def _reduce_results(self):
-        results = self._results
-        sort_field = self.sort_field
-        # Recommended
-        # Release/Weekly/Daily
-        # Experimental/Latest/Other
-        c_candidates = []
-        r_candidates = []
-        w_candidates = []
-        d_candidates = []
-        e_candidates = []
-        l_candidates = []
-        o_candidates = []
-        # This is the order for tags to appear in menu:
-        displayorder = []
-        if self.recommended:
-            displayorder.extend([c_candidates])
-        displayorder.extend([e_candidates, d_candidates, w_candidates,
-                             r_candidates])
-        # This is the order for tags to appear in drop-down:
-        imgorder = [l_candidates]
-        imgorder.extend(displayorder)
-        imgorder.extend(o_candidates)
-        reduced_results = {}
-        for res in results:
-            vname = res["name"]
-            reduced_results[vname] = {
-                "name": vname,
-                "id": res["id"],
-                "size": res["full_size"],
-                "description": self._describe_tag(vname)
-            }
-            entry = reduced_results[vname]
-            manifest = self._name_to_manifest.get(vname)
-            if manifest:
-                entry["updated"] = manifest.get("updated")
-                entry["hash"] = manifest.get("hash")
-            else:
-                entry["updated"] = self._convert_time(res["last_updated"])
-                entry["hash"] = None
-        for res in reduced_results:
-            if res.startswith("r") and not res.startswith("recommended"):
-                r_candidates.append(reduced_results[res])
-            elif res.startswith("w"):
-                w_candidates.append(reduced_results[res])
-            elif res.startswith("d"):
-                d_candidates.append(reduced_results[res])
-            elif res.startswith("exp"):
-                e_candidates.append(reduced_results[res])
-            elif res.startswith("latest"):
-                l_candidates.append(reduced_results[res])
-            elif res.startswith("recommended"):
-                c_candidates.append(reduced_results[res])
-            else:
-                o_candidates.append(res)
-        for clist in imgorder:
-            if sort_field != 'name':
-                clist.sort(key=lambda x: x[sort_field], reverse=True)
-            else:
-                clist = self._sort_images_by_name(clist)
-        r = {}
-        # Index corresponds to order in displayorder
-        idxbase = 0
-        imap = {}
-        if self.recommended:
-            imap.update({"recommended": {"index": idxbase,
-                                         "count": 1}
+        with start_action(action_type="_reduce_results"):
+            results = self._results
+            sort_field = self.sort_field
+            # Recommended
+            # Release/Weekly/Daily
+            # Experimental/Latest/Other
+            c_candidates = []
+            r_candidates = []
+            w_candidates = []
+            d_candidates = []
+            e_candidates = []
+            l_candidates = []
+            o_candidates = []
+            # This is the order for tags to appear in menu:
+            displayorder = []
+            if self.recommended:
+                displayorder.extend([c_candidates])
+            displayorder.extend([e_candidates, d_candidates, w_candidates,
+                                 r_candidates])
+            # This is the order for tags to appear in drop-down:
+            imgorder = [l_candidates]
+            imgorder.extend(displayorder)
+            imgorder.extend(o_candidates)
+            reduced_results = {}
+            for res in results:
+                vname = res["name"]
+                reduced_results[vname] = {
+                    "name": vname,
+                    "id": res["id"],
+                    "size": res["full_size"],
+                    "description": self._describe_tag(vname)
+                }
+                entry = reduced_results[vname]
+                manifest = self._name_to_manifest.get(vname)
+                if manifest:
+                    entry["updated"] = manifest.get("updated")
+                    entry["hash"] = manifest.get("hash")
+                else:
+                    entry["updated"] = self._convert_time(res["last_updated"])
+                    entry["hash"] = None
+                for res in reduced_results:
+                    if (res.startswith("r") and not
+                            res.startswith("recommended")):
+                        r_candidates.append(reduced_results[res])
+                    elif res.startswith("w"):
+                        w_candidates.append(reduced_results[res])
+                    elif res.startswith("d"):
+                        d_candidates.append(reduced_results[res])
+                    elif res.startswith("exp"):
+                        e_candidates.append(reduced_results[res])
+                    elif res.startswith("latest"):
+                        l_candidates.append(reduced_results[res])
+                    elif res.startswith("recommended"):
+                        c_candidates.append(reduced_results[res])
+                    else:
+                        o_candidates.append(res)
+            for clist in imgorder:
+                if sort_field != 'name':
+                    clist.sort(key=lambda x: x[sort_field], reverse=True)
+                else:
+                    clist = self._sort_images_by_name(clist)
+            r = {}
+            # Index corresponds to order in displayorder
+            idxbase = 0
+            imap = {}
+            if self.recommended:
+                imap.update({"recommended": {"index": idxbase,
+                                             "count": 1}
+                             })
+                idxbase = 1
+            imap.update({"experimental": {"index": idxbase,
+                                          "count": self.experimentals},
+                         "daily": {"index": idxbase + 1,
+                                   "count": self.dailies},
+                         "weekly": {"index": idxbase + 2,
+                                    "count": self.weeklies},
+                         "release": {"index": idxbase + 3,
+                                     "count": self.releases}
                          })
-            idxbase = 1
-        imap.update({"experimental": {"index": idxbase,
-                                      "count": self.experimentals},
-                     "daily": {"index": idxbase + 1,
-                               "count": self.dailies},
-                     "weekly": {"index": idxbase + 2,
-                                "count": self.weeklies},
-                     "release": {"index": idxbase + 3,
-                                 "count": self.releases}
-                     })
-        for ikey in list(imap.keys()):
-            idx = imap[ikey]["index"]
-            ict = imap[ikey]["count"]
-            if ict:
-                r[ikey] = displayorder[idx][:ict]
-        all_tags = self._sort_tags_by_date()
-        self._all_tags = all_tags
-        self.data = r
+            for ikey in list(imap.keys()):
+                idx = imap[ikey]["index"]
+                ict = imap[ikey]["count"]
+                if ict:
+                    r[ikey] = displayorder[idx][:ict]
+            all_tags = self._sort_tags_by_date()
+            self._all_tags = all_tags
+            self.data = r
 
     def _sort_tags_by_date(self):
         items = [x[1] for x in self._results_map.items()]
@@ -617,23 +625,23 @@ class ScanRepo(object):
         # Return all new style names first.
         return sorted_newstyle.extend(oldstyle)
 
-    @log_call
     def _sort_releases_by_name(self, r_candidates):
-        # rXYZrc2 should *precede* rXYZ
-        # We're going to decorate short (that is, no rc tag) release names
-        #  with "zzz", re-sort, and then undecorate.
-        nm = {}
-        for c in r_candidates:
-            tag = c["name"]
-            if len(tag) == 4:
-                xtag = tag+"zzz"
-                nm[xtag] = tag
-                c["name"] = xtag
-        r_candidates.sort(key=lambda x: x["name"], reverse=True)
-        for c in r_candidates:
-            xtag = c["name"]
-            c["name"] = nm[xtag]
-        return r_candidates
+        with start_action(action_type="_sort_releases_by_name"):
+            # rXYZrc2 should *precede* rXYZ
+            # We're going to decorate short (that is, no rc tag) release names
+            #  with "zzz", re-sort, and then undecorate.
+            nm = {}
+            for c in r_candidates:
+                tag = c["name"]
+                if len(tag) == 4:
+                    xtag = tag+"zzz"
+                    nm[xtag] = tag
+                    c["name"] = xtag
+            r_candidates.sort(key=lambda x: x["name"], reverse=True)
+            for c in r_candidates:
+                xtag = c["name"]
+                c["name"] = nm[xtag]
+            return r_candidates
 
     # Don't annotate this one; datetime isn't serializable.
     def _convert_time(self, ts):
