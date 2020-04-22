@@ -1,7 +1,7 @@
 # Inspired by, and based on, Adam Tilghman's Multi-Namespace work in
 #  https://github.com/jupyterhub/kubespawner/pull/218
 import time
-from eliot import log_call
+from eliot import start_action
 from kubernetes import watch
 from kubespawner.reflector import NamespacedResourceReflector
 from traitlets import Bool
@@ -27,13 +27,12 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
         """
         return resource.metadata.name
 
-    @log_call
     def _list_and_update(self):
         """
         Update current list of resources by doing a full fetch.
         Overwrites all current resource info.
         """
-
+        # Way too spammy to log with eliot.
         list_args = {
             'label_selector': self.label_selector,
             'field_selector': self.field_selector,
@@ -52,7 +51,6 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
         # return the resource version so we can hook up a watch
         return initial_resources.metadata.resource_version
 
-    @log_call
     def _watch_and_update(self):
         """
         Keeps the current list of resources up-to-date
@@ -75,101 +73,104 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
         and as long as we don't try to mutate them (do a 'fetch / modify /
         update' cycle on them), we should be ok!
         """
-        selectors = []
-        if self.label_selector:
-            selectors.append("label selector=%r" % self.label_selector)
-        if self.field_selector:
-            selectors.append("field selector=%r" % self.field_selector)
-        log_selector = ', '.join(selectors)
+        with start_action(action_type="_watch_and_update"):
+            selectors = []
+            if self.label_selector:
+                selectors.append("label selector=%r" % self.label_selector)
+            if self.field_selector:
+                selectors.append("field selector=%r" % self.field_selector)
+            log_selector = ', '.join(selectors)
 
-        cur_delay = 0.1
-        ns = self.namespace
-        if self.list_method_omit_namespace:
-            ns = "[GLOBAL]"
+            cur_delay = 0.1
+            ns = self.namespace
+            if self.list_method_omit_namespace:
+                ns = "[GLOBAL]"
 
-        self.log.info(
-            "watching for %s with %s in namespace %s",
-            self.kind, log_selector, ns,
-        )
-        while True:
-            start = time.monotonic()
-            w = watch.Watch()
-            try:
-                resource_version = self._list_and_update()
-                if not self.first_load_future.done():
-                    # signal that we've loaded our initial data
-                    self.first_load_future.set_result(None)
-                watch_args = {
-                    'label_selector': self.label_selector,
-                    'field_selector': self.field_selector,
-                    'resource_version': resource_version,
-                }
-                if not self.list_method_omit_namespace:
-                    watch_args['namespace'] = self.namespace
-                if self.request_timeout:
-                    # set network receive timeout
-                    watch_args['_request_timeout'] = self.request_timeout
-                if self.timeout_seconds:
-                    # set watch timeout
-                    watch_args['timeout_seconds'] = self.timeout_seconds
-                # in case of timeout_seconds, the w.stream just exits
-                #  (no exception thrown)
-                #     -> we stop the watcher and start a new one
-                for ev in w.stream(
-                        getattr(self.api, self.list_method_name),
-                        **watch_args
-                ):
-                    cur_delay = 0.1
-                    resource = ev['object']
-                    if ev['type'] == 'DELETED':
-                        # This is an atomic delete operation on the dictionary!
-                        self.resources.pop(
-                            self._create_resource_key(resource), None)
-                    else:
-                        # This is an atomic operation on the dictionary!
-                        self.resources[self._create_resource_key(
-                            resource)] = resource
-                    if self._stop_event.is_set():
-                        self.log.info("%s watcher stopped", self.kind)
-                        break
-                        break
+            # self.log.info(
+            #    "watching for %s with %s in namespace %s",
+            #    self.kind, log_selector, ns,
+            # )
+            while True:
+                start = time.monotonic()
+                w = watch.Watch()
+                try:
+                    resource_version = self._list_and_update()
+                    if not self.first_load_future.done():
+                        # signal that we've loaded our initial data
+                        self.first_load_future.set_result(None)
+                        watch_args = {
+                            'label_selector': self.label_selector,
+                            'field_selector': self.field_selector,
+                            'resource_version': resource_version,
+                        }
+                    if not self.list_method_omit_namespace:
+                        watch_args['namespace'] = self.namespace
+                    if self.request_timeout:
+                        # set network receive timeout
+                        watch_args['_request_timeout'] = self.request_timeout
+                    if self.timeout_seconds:
+                        # set watch timeout
+                        watch_args['timeout_seconds'] = self.timeout_seconds
+                    # in case of timeout_seconds, the w.stream just exits
+                    #  (no exception thrown)
+                    #     -> we stop the watcher and start a new one
+                    for ev in w.stream(
+                            getattr(self.api, self.list_method_name),
+                            **watch_args
+                    ):
+                        cur_delay = 0.1
+                        resource = ev['object']
+                        if ev['type'] == 'DELETED':
+                            # This is an atomic delete operation on the
+                            # dictionary!
+                            self.resources.pop(
+                                self._create_resource_key(resource), None)
+                        else:
+                            # This is an atomic operation on the dictionary!
+                            self.resources[self._create_resource_key(
+                                resource)] = resource
+                            if self._stop_event.is_set():
+                                # self.log.info("%s watcher stopped",
+                                #     self.kind)
+                                break
                     watch_duration = time.monotonic() - start
                     if watch_duration >= self.restart_seconds:
-                        self.log.debug(
-                            "Restarting %s watcher after %i seconds",
-                            self.kind, watch_duration,
-                        )
+                        # self.log.debug(
+                        #    "Restarting %s watcher after %i seconds",
+                        #    self.kind, watch_duration,
+                        # )
                         break
-            except ReadTimeoutError:
-                # network read time out, just continue and restart the watch
-                # this could be due to a network problem or just low activity
-                self.log.warning(
-                    "Read timeout watching %s, reconnecting", self.kind)
-                continue
-            except Exception:
-                cur_delay = cur_delay * 2
-                if cur_delay > 30:
+                except ReadTimeoutError:
+                    # network read time out, just continue and restart
+                    # the watch; this could be due to a network problem
+                    # or just low activity
+                    # self.log.warning(
+                    #    "Read timeout watching %s, reconnecting", self.kind)
+                    continue
+                except Exception:
+                    cur_delay = cur_delay * 2
+                    if cur_delay > 30:
+                        self.log.exception(
+                            "Watching resources never recovered, giving up")
+                        if self.on_failure:
+                            self.on_failure()
+                        return
                     self.log.exception(
-                        "Watching resources never recovered, giving up")
-                    if self.on_failure:
-                        self.on_failure()
-                    return
-                self.log.exception(
-                    "Error when watching resources, retrying in" +
-                    " %ss" % cur_delay)
-                time.sleep(cur_delay)
-                continue
-            else:
-                # no events on watch, reconnect
-                # This is super-spammy, so don't log it
-                # self.log.debug("%s watcher timeout", self.kind)
-                pass
-            finally:
-                w.stop()
-                if self._stop_event.is_set():
-                    self.log.info("%s watcher stopped", self.kind)
-                    break
-        self.log.warning("%s watcher finished", self.kind)
+                        "Error when watching resources, retrying in" +
+                        " %ss" % cur_delay)
+                    time.sleep(cur_delay)
+                    continue
+                else:
+                    # no events on watch, reconnect
+                    # This is super-spammy, so don't log it
+                    # self.log.debug("%s watcher timeout", self.kind)
+                    pass
+                finally:
+                    w.stop()
+                    if self._stop_event.is_set():
+                        # self.log.info("%s watcher stopped", self.kind)
+                        break
+            self.log.warning("%s watcher finished", self.kind)
 
 
 class EventReflector(MultiNamespaceResourceReflector):
