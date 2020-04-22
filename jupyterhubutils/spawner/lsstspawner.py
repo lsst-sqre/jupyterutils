@@ -3,7 +3,7 @@ namespaces, and with an lsst_mgr attribute.
 '''
 import json
 from .multispawner import MultiNamespacedKubeSpawner
-from eliot import log_call, start_action
+from eliot import start_action
 from kubespawner.objects import make_pod
 from tornado import gen
 from traitlets import Bool
@@ -126,60 +126,61 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         self.log.debug("Form received: {}".format(form))
         return form
 
-    @log_call
     def set_user_namespace(self):
         '''Get namespace and store it here (for spawning) and in
         namespace_mgr.'''
-        ns = self.get_user_namespace()
-        self.namespace = ns
-        self.lsst_mgr.namespace_mgr.set_namespace(ns)
+        with start_action(action_type="set_user_namespace"):
+            ns = self.get_user_namespace()
+            self.namespace = ns
+            self.lsst_mgr.namespace_mgr.set_namespace(ns)
 
-    @log_call
     def get_user_namespace(self):
         '''Return namespace for user pods (and ancillary objects).
         '''
-        defname = self._namespace_default()
-        # We concatenate the default namespace and the name so that we
-        #  can continue having multiple Jupyter instances in the same
-        #  k8s cluster in different namespaces.  The user namespaces must
-        #  themselves be namespaced, as it were.
-        if defname == "default":
-            raise ValueError("Won't spawn into default namespace!")
-        return "{}-{}".format(defname, self.user.escaped_name)
+        with start_action(action_type="get_user_namespace"):
+            defname = self._namespace_default()
+            # We concatenate the default namespace and the name so that we
+            #  can continue having multiple Jupyter instances in the same
+            #  k8s cluster in different namespaces.  The user namespaces must
+            #  themselves be namespaced, as it were.
+            if defname == "default":
+                raise ValueError("Won't spawn into default namespace!")
+            return "{}-{}".format(defname, self.user.escaped_name)
 
     def start(self):
-        # All we need to do is ensure the namespace and K8s ancillary
-        #  resources before we run the superclass method to spawn a pod,
-        #  so we have the namespace to spawn into, and the service account
-        #  with appropriate roles and rolebindings.
-        self.log.debug("Starting; creating namespace and ancillary objects.")
-        self.set_user_namespace()  # Set namespace here and in namespace_mgr
-        self.lsst_mgr.ensure_resources()
-        retval = super().start()
-        return retval
+        with start_action(action_type="start"):
+            # All we need to do is ensure the namespace and K8s ancillary
+            #  resources before we run the superclass method to spawn a pod,
+            #  so we have the namespace to spawn into, and the service account
+            #  with appropriate roles and rolebindings.
+            self.log.debug("Starting; creating namespace/ancillary objects.")
+            self.set_user_namespace()  # Set namespace here/in namespace_mgr
+            self.lsst_mgr.ensure_resources()
+            retval = super().start()
+            return retval
 
     @gen.coroutine
     def stop(self, now=False):
         '''After stopping pod, delete the namespace if that option is set.
         '''
-        _ = yield super().stop(now)
-        if self.delete_namespace_on_stop:
-            nsm = self.lsst_mgr.namespace_mgr
-            self.log.debug("Attempting to delete namespace.")
-            self.asynchronize(nsm.maybe_delete_namespace)
-        else:
-            self.log.debug("'delete_namespace_on_stop' not set.")
+        with start_action(action_type="stop"):
+            _ = yield super().stop(now)
+            if self.delete_namespace_on_stop:
+                nsm = self.lsst_mgr.namespace_mgr
+                self.log.debug("Attempting to delete namespace.")
+                self.asynchronize(nsm.maybe_delete_namespace)
+            else:
+                self.log.debug("'delete_namespace_on_stop' not set.")
 
-    @log_call
     def options_from_form(self, formdata=None):
         '''Delegate to form manager.
         '''
         # LSST Manager sometimes unset when we make it here.  I don't
         #  understand why that is.  Let's try moving the hooking up
         #  lsst_mgr into __init__ rather than get_form_options.
-        return self.lsst_mgr.optionsform_mgr.options_from_form(formdata)
+        with start_action(action_type="options_from_form"):
+            return self.lsst_mgr.optionsform_mgr.options_from_form(formdata)
 
-    # Do not annotate with @log_call as a V1Pod is not JSON-serializable.
     @gen.coroutine
     def get_pod_manifest(self):
         # Extend pod manifest.  This is a monster method.

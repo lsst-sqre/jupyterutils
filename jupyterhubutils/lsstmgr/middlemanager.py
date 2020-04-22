@@ -1,5 +1,5 @@
 import json
-from eliot import log_call
+from eliot import start_action
 from .. import Loggable
 from .apimanager import LSSTAPIManager
 from .authmanager import LSSTAuthManager
@@ -57,11 +57,11 @@ class LSSTMiddleManager(Loggable):
         self.rbac_api = self.api_mgr.rbac_api
         self.wf_api = self.api_mgr.wf_api
 
-    @log_call
     def ensure_resources(self):
         '''Delegate to namespace manager.
         '''
-        self.namespace_mgr.ensure_namespace()
+        with start_action(action_type="ensure_resources"):
+            self.namespace_mgr.ensure_namespace()
 
     def dump(self):
         '''Return contents dict to pretty-print.

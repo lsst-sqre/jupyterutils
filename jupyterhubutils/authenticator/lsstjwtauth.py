@@ -1,7 +1,7 @@
 '''LSST Authenticator to use JWT token present in request headers.
 '''
 import asyncio
-from eliot import log_call, start_action
+from eliot import start_action
 from jwtauthenticator.jwtauthenticator import JSONWebTokenAuthenticator
 from .lsstauth import LSSTAuthenticator
 from .lsstjwtloginhandler import LSSTJWTLoginHandler
@@ -21,19 +21,19 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
         self.log.debug("Creating LSSTJWTAuthenticator")
         super().__init__(*args, **kwargs)
 
-    @log_call
     def get_handlers(self, app):
         '''Install custom handlers.
         '''
-        return [
-            (r'/login', LSSTJWTLoginHandler),
-        ]
+        with start_action(action_type="get_handlers"):
+            return [
+                (r'/login', LSSTJWTLoginHandler),
+            ]
 
-    @log_call
     def logout_url(self, base_url):
         '''Returns the logout URL for JWT.
         '''
-        return self.lsst_mgr.config.jwt_logout_url
+        with start_action(action_type="logout_url"):
+            return self.lsst_mgr.config.jwt_logout_url
 
     async def refresh_user(self, user, handler):
         '''Delegate to login handler, if this happens in the login
