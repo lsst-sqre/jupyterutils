@@ -36,28 +36,29 @@ class LSSTGitHubOAuthenticator(LSSTAuthenticator,
     def authenticate(self, handler, data=None):
         '''Authenticate and store data on auth_mgr.
         '''
-        with start_action(action_type="authenticate"):
-            self.log.info("Authenticating user against GitHub.")
-            cfg = self.lsst_mgr.config
-            # This must be set for the superclass authentication
-            self.github_organization_whitelist = cfg.github_allowlist
-            userdict = yield super().authenticate(handler, data)
-            if userdict is None:
-                return None
-            ast = userdict["auth_state"]
-            token = ast["access_token"]
-            self.log.debug("Setting authenticator groups from token.")
-            groupmap = yield self._get_github_user_organizations(token)
-            groups = list(groupmap.keys())
-            ok = check_membership(groups, cfg.allowed_groups,
-                                  cfg.forbidden_groups, log=self.log)
-            if not ok:
-                self.log.warning("Group membership check failed.")
-                return None
-            _ = yield self._set_github_user_email(ast, token)
-            ast['group_map'] = groupmap
-            ast['uid'] = ast['github_user']['id']
-            return userdict
+        # FIXME: Context error
+        # with start_action(action_type="authenticate"):
+        self.log.info("Authenticating user against GitHub.")
+        cfg = self.lsst_mgr.config
+        # This must be set for the superclass authentication
+        self.github_organization_whitelist = cfg.github_allowlist
+        userdict = yield super().authenticate(handler, data)
+        if userdict is None:
+            return None
+        ast = userdict["auth_state"]
+        token = ast["access_token"]
+        self.log.debug("Setting authenticator groups from token.")
+        groupmap = yield self._get_github_user_organizations(token)
+        groups = list(groupmap.keys())
+        ok = check_membership(groups, cfg.allowed_groups,
+                              cfg.forbidden_groups, log=self.log)
+        if not ok:
+            self.log.warning("Group membership check failed.")
+            return None
+        _ = yield self._set_github_user_email(ast, token)
+        ast['group_map'] = groupmap
+        ast['uid'] = ast['github_user']['id']
+        return userdict
 
     @gen.coroutine
     def _get_github_user_organizations(self, access_token):
