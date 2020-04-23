@@ -415,36 +415,36 @@ class ScanRepo(object):
                     authtok = jresp.get("token")
             elif sc != 200:
                 self.logger.warning("GET %s -> %d" % (url, sc))
-                # https://docs.docker.com/registry/spec/api/ ,
-                # "Deleting An Image"
-                # Yep, I think that's the only place it tells you that you need
-                #  this magic header to get the digest hash.
-                headers = {
-                    "Accept": ("application/vnd.docker.distribution." +
-                               "manifest.v2+json")}
-                if authtok:
-                    headers.update(
-                        {"Authorization": "Bearer {}".format(authtok)})
-                    for name in check_names:
-                        resp = requests.head(baseurl + "manifests/{}".format(
-                            name),
-                            headers=headers)
-                        ihash = resp.headers["Docker-Content-Digest"]
-                        namemap[name]["hash"] = ihash
-                        results[name]["hash"] = ihash
-                    dstr = results[name]["last_updated"]
-                    if dstr:
-                        dt = self._convert_time(dstr)
-                        namemap[name]["updated"] = dt
-                self._name_to_manifest.update(namemap)
-                if self.cachefile:
-                    self.logger.debug("Writing cache file.")
-                    try:
-                        self._writecachefile()
-                    except Exception as exc:
-                        self.log.error(
-                            "Failed to write cache file: {}".format(exc))
-                        # We're up to date.
+            # https://docs.docker.com/registry/spec/api/ ,
+            # "Deleting An Image"
+            # Yep, I think that's the only place it tells you that you need
+            #  this magic header to get the digest hash.
+            headers = {
+                "Accept": ("application/vnd.docker.distribution" +
+                           ".manifest.v2+json")}
+            if authtok:
+                headers.update(
+                    {"Authorization": "Bearer {}".format(authtok)})
+                for name in check_names:
+                    resp = requests.head(baseurl + "manifests/{}".format(
+                        name),
+                        headers=headers)
+                    ihash = resp.headers["Docker-Content-Digest"]
+                    namemap[name]["hash"] = ihash
+                    results[name]["hash"] = ihash
+                dstr = results[name]["last_updated"]
+                if dstr:
+                    dt = self._convert_time(dstr)
+                    namemap[name]["updated"] = dt
+            self._name_to_manifest.update(namemap)
+            if self.cachefile:
+                self.logger.debug("Writing cache file.")
+                try:
+                    self._writecachefile()
+                except Exception as exc:
+                    self.log.error(
+                        "Failed to write cache file: {}".format(exc))
+                    # We're up to date.
 
     def _writecachefile(self):
         with start_action(action_type="_writecachefile"):

@@ -204,8 +204,10 @@ class LSSTConfig(metaclass=Singleton):
             self.proxy_host = os.getenv('PROXY_SERVICE_HOST') or my_ip
             self.proxy_api_port = os.getenv('PROXY_SERVICE_PORT_API') or 8001
             self.session_db_url = os.getenv('SESSION_DB_URL')
-            # Pod multicast (used at summit)
+            # Pod multicast (used with SAL)
             self.enable_multus = str_bool(os.getenv('ENABLE_MULTUS'))
+            # DDS domain (used with SAL)
+            self.lab_dds_domain = os.getenv('LSST_DDS_DOMAIN')
             # These have to be set post-initialization to avoid a circular
             #  dependency.
             self.authenticator_class = None
