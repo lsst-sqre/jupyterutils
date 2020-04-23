@@ -331,6 +331,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             if cfg.enable_multus:
                 annotations['k8s.v1.cni.cncf.io/networks'] = \
                     'kube-system/macvlan-conf'
+            if cfg.lab_dds_domain:
+                pod_env['LSST_DDS_DOMAIN'] = cfg.lab_dds_domain
             # Generate the pod definition.
             sanitized_env = sanitize_dict(pod_env, [
                 'ACCESS_TOKEN', 'GITHUB_ACCESS_TOKEN',
