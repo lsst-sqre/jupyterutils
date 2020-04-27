@@ -1,4 +1,5 @@
 import copy
+import datetime
 import json
 import logging
 import os
@@ -137,7 +138,9 @@ class Prepuller(object):
                     for itype in repocopy:
                         for item in repocopy[itype]:
                             uddt = item["updated"]
-                            item["updated"] = uddt.isoformat()
+                            if type(uddt) is datetime.datetime:
+                                uddt = uddt.isoformat()
+                                item["updated"] = uddt
                     self.logger.debug("Scan Data: " +
                                       json.dumps(repocopy,
                                                  sort_keys=True,
