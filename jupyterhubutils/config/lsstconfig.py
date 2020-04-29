@@ -87,8 +87,7 @@ class LSSTConfig(metaclass=Singleton):
             self.oauth_client_secret = os.getenv('OAUTH_CLIENT_SECRET')
             self.oauth_callback_url = os.getenv('OAUTH_CALLBACK_URL')
             # Authenticator-specific parameters
-            # Yes, really "sign_in".  Blame BVan.
-            self.jwt_logout_url = os.getenv("LOGOUT_URL") or '/oauth2/sign_in'
+            self.jwt_logout_url = os.getenv("LOGOUT_URL") or '/logout'
             self.jwt_signing_certificate = (
                 os.getenv('JWT_SIGNING_CERTIFICATE') or
                 '/opt/jwt/signing-certificate.pem')
