@@ -21,16 +21,17 @@ class LSSTAuthenticator(Authenticator):
       * auth_state['uid'], which contains a string or an integer with the
         user's numeric UID.
     '''
-    enable_auth_state = True
-    delete_invalid_users = True
-    token = None  # Only used for JWT, but we want it as a generic field for
-    # the workflow manager.
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lsst_mgr = LSSTMiddleManager(parent=self,
                                           authenticator=self,
                                           config=LSSTConfig())
+        self.enable_auth_state = True
+        self.delete_invalid_users = True
+        self.token = None
+        # Token is only used for JWT, but we want it as a generic
+        # field for the workflow manager.
 
     def resolve_cilogon(self, membership):
         '''Shared between CILogon and JWT (which uses CILogon as its backing

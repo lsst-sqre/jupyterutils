@@ -15,20 +15,13 @@ from ..utils import make_logger
 class Prepuller(object):
     '''Class for generating and reaping the Pods for the prepuller.
     '''
-    repo = None
-    logger = None
-    client = None
-    images = []
-    nodes = []
-    pod_specs = {}
-    created_pods = []
-    args = None
 
     def __init__(self, args=None):
         self.logger = make_logger()
         if not args:
             raise ValueError("args must be set!")
         self.args = args
+        self.debug = False
         if args.debug:
             self.debug = True
         if self.debug:
@@ -44,6 +37,11 @@ class Prepuller(object):
         except config.ConfigException:
             config.load_kube_config()
         self.client = client.CoreV1Api()
+        self.images = []
+        self.nodes = []
+        self.pod_specs = {}
+        self.created_pods = []
+
         self.logger.debug("Arguments: %s" % str(args))
         self.command = self.args.command
         self.cachefile = self.args.cachefile

@@ -15,12 +15,6 @@ class Reaper(SingletonScanner):
                          }
     # We don't need to categorize releases since we never delete any of
     #  them.
-    reapable = {}
-    keep_experimentals = 10
-    keep_dailies = 15
-    keep_weeklies = 78
-    delete_tags = False
-    dry_run = False
 
     def __init__(self, *args, **kwargs):
         self.keep_experimentals = kwargs.pop('keep_experimentals', 10)
@@ -33,8 +27,10 @@ class Reaper(SingletonScanner):
                            "experimentals.").format(self.keep_weeklies,
                                                     self.keep_dailies,
                                                     self.keep_experimentals))
+        self.delete_tags = False
         if self.registry_url.startswith('registry.hub.docker.com'):
             self.delete_tags = True
+        self.reapable = {}
 
     def _categorize_tags(self):
         with start_action(action_type="_categorize_tags"):

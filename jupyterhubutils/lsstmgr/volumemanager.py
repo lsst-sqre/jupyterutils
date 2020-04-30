@@ -10,9 +10,12 @@ from .. import LoggableChild
 class LSSTVolumeManager(LoggableChild):
     '''Class to provide support for document-driven Volume assignment.
     '''
-    volume_list = []
-    k8s_volumes = []
-    k8s_vol_mts = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.volume_list = []
+        self.k8s_volumes = []
+        self.k8s_vol_mts = []
 
     def make_volumes_from_config(self):
         '''Create volume definition representation from document.

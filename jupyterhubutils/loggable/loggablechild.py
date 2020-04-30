@@ -2,10 +2,9 @@ from .loggable import Loggable
 
 
 class LoggableChild(Loggable):
-    parent = None
 
     def __init__(self, *args, **kwargs):
-        parent = kwargs.pop('parent', self.parent)
+        parent = kwargs.pop('parent', None)
         if not parent:
             es = "Child object must be passed parent at __init__()"
             raise ValueError(es)

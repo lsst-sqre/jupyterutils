@@ -16,12 +16,13 @@ class LSSTWorkflowManager(LoggableChild):
     specific logic regarding management of Argo Workflows.
     '''
 
-    cmd_vol = None
-    cmd_mt = None
-    wf_api = None
-    workflow = None
-    cfg_map = None
-    wf_input = None
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cmd_vol = None
+        self.cmd_mt = None
+        self.workflow = None
+        self.cfg_map = None
+        self.wf_input = None
 
     def define_configmap(self, data):
         '''This returns a k8s configmap using the data from the new-workflow

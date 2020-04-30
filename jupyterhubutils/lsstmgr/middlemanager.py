@@ -19,32 +19,14 @@ class LSSTMiddleManager(Loggable):
     empowered to perform all LSST-specific operations, reducing
     configuration complexity.
     '''
-    parent = None
-    config = None
-    authenticator = None
-    spawner = None
-    user = None
-    api = None
-    rbac_api = None
-    wf_api = None
-    api_mgr = None
-    auth_mgr = None
-    namespace_mgr = None
-    optionsform_mgr = None
-    quota_mgr = None
-    volume_mgr = None
-    workflow_mgr = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.config = kwargs.pop('config', None)
+        self.parent = kwargs.pop('parent', None)
         self.log.info(
             "Parent of LSST Middle Manager is '{}'".format(self.parent))
-        self.config = kwargs.pop('config')
-        parent = kwargs.pop('parent', self.parent)
-        self.parent = parent
-        authenticator = kwargs.pop('authenticator', self.authenticator)
-        self.authenticator = authenticator
-        self.authenticator = self.parent
+        self.authenticator = kwargs.pop('authenticator', None)
         self.api_mgr = LSSTAPIManager(parent=self)
         self.auth_mgr = LSSTAuthManager(parent=self)
         self.env_mgr = LSSTEnvironmentManager(parent=self)

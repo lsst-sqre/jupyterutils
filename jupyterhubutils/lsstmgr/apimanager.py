@@ -9,9 +9,6 @@ from argo.workflows.client import V1alpha1Api
 
 
 class LSSTAPIManager(LoggableChild, metaclass=Singleton):
-    wf_api = None
-    rbac_api = None
-    api = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -25,15 +22,15 @@ class LSSTAPIManager(LoggableChild, metaclass=Singleton):
                 argo.workflows.config.load_kube_config()
             except ValueError as exc:
                 self.log.error("Still errored: {}".format(exc))
-        wf_api = kwargs.pop('wf_api', self.wf_api)
+        wf_api = kwargs.pop('wf_api', None)
         if not wf_api:
             wf_api = V1alpha1Api()
         self.wf_api = wf_api
-        rbac_api = kwargs.pop('rbac_api', self.rbac_api)
+        rbac_api = kwargs.pop('rbac_api', None)
         if not rbac_api:
             rbac_api = shared_client('RbacAuthorizationV1Api')
         self.rbac_api = rbac_api
-        api = kwargs.pop('api', self.api)
+        api = kwargs.pop('api', None)
         if not api:
             api = shared_client('CoreV1Api')
         self.api = api

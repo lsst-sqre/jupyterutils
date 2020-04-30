@@ -10,9 +10,12 @@ from .. import LoggableChild
 class LSSTQuotaManager(LoggableChild):
     '''Quota support for LSST LSP Jupyterlab and Dask pods.
     '''
-    quota = {}
-    custom_resources = {}
-    resourcemap = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.quota = {}
+        self.custom_resources = {}
+        self.resourcemap = None
 
     def define_resource_quota_spec(self):
         '''We're going to return a resource quota spec that checks whether we
