@@ -9,17 +9,10 @@ from ..singleton import Singleton
 class SingletonScanner(ScanRepo, metaclass=Singleton):
     '''Singleton Object to hold rate-limited scanner.
     '''
-    min_refresh_time = 60
-    max_cache_age = 600
-    last_updated = datetime.datetime(1970, 1, 1)  # The Epoch
-    scanning = False
-    lock = threading.RLock()
 
     def __init__(self, **kwargs):
-        min_refresh_time = kwargs.get('min_refresh_time')
-        if min_refresh_time is None:
-            min_refresh_time = 60
-        max_cache_age = kwargs.get('max_cache_age')
+        min_refresh_time = kwargs.get('min_refresh_time', 60)
+        max_cache_age = kwargs.get('max_cache_age', 600)
         if max_cache_age is None:
             max_cache_age = 600
         # Now remove them from kwargs before superclass init
@@ -29,6 +22,9 @@ class SingletonScanner(ScanRepo, metaclass=Singleton):
         super().__init__(**kwargs)
         self.min_refresh_time = min_refresh_time
         self.max_cache_age = max_cache_age
+        self.last_updated = datetime.datetime(1970, 1, 1)  # The Epoch
+        self.scanning = False
+        self.lock = threading.RLock()
         if max_cache_age < min_refresh_time:
             max_cache_age = 2 * min_refresh_time
             self.max_cache_age = max_cache_age

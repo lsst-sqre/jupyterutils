@@ -25,12 +25,13 @@ def github_api_headers(access_token):
 class LSSTGitHubOAuthenticator(LSSTAuthenticator,
                                oauthenticator.GitHubOAuthenticator):
     login_handler = oauthenticator.OAuthLoginHandler
-    scope = ['read:org', 'user:email', 'public_repo']
+    # Really a class variable
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
         self.log.debug("Creating LSSTGitHubOAuthenticator.")
         super().__init__(*args, **kwargs)
+        self.scope = ['read:org', 'user:email', 'public_repo']
 
     @gen.coroutine
     def authenticate(self, handler, data=None):

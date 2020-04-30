@@ -12,12 +12,13 @@ from ..utils import make_logger
 class LSSTCILogonOAuthenticator(LSSTAuthenticator,
                                 oauthenticator.CILogonOAuthenticator):
     login_handler = oauthenticator.CILogonLoginHandler
-    _default_domain = None
+    # This one really is a class variable.
 
     def __init__(self, *args, **kwargs):
         self.log = make_logger()
         self.log.debug("Creating LSSTCILogonOAuthenticator")
         super().__init__(*args, **kwargs)
+        self._default_domain = None
 
     @gen.coroutine
     def authenticate(self, handler, data=None):

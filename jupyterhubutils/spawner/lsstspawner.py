@@ -14,27 +14,9 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     '''This, plus the LSST Manager class structure, implements the
     LSST-specific parts of our spawning requirements.
     '''
-    lsst_mgr = None
-    wf_api = None
-    delete_grace_period = 5
-    # In our LSST setup, there is a "provisionator" user, uid/gid 769,
-    #  that is who we should start as.
-    uid = 769
-    gid = 769
-    # The fields need to be defined; we don't use them.
-    fs_gid = None
-    supplemental_gids = []
-    extra_labels = {}
-    extra_annotations = []
-    image_pull_secrets = None
-    privileged = False
-    working_dir = None
-    lifecycle_hooks = {}  # This one will be useful someday.
-    init_containers = []
-    lab_service_account = None
-    extra_container_config = None
-    extra_pod_config = None
-    extra_containers = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     delete_namespace_on_stop = Bool(
         True,
@@ -85,6 +67,26 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         lm.spawner = self
         lm.user = user
         self.log.debug("Initialized {}".format(__name__))
+        self.wf_api = None
+        self.delete_grace_period = 5
+        # In our LSST setup, there is a "provisionator" user, uid/gid 769,
+        #  that is who we should start as.
+        self.uid = 769
+        self.gid = 769
+        # The fields need to be defined; we don't use them.
+        self.fs_gid = None
+        self.supplemental_gids = []
+        self.extra_labels = {}
+        self.extra_annotations = {}
+        self.image_pull_secrets = None
+        self.privileged = False
+        self.working_dir = None
+        self.lifecycle_hooks = {}  # This one will be useful someday.
+        self.init_containers = []
+        self.lab_service_account = None
+        self.extra_container_config = {}
+        self.extra_pod_config = {}
+        self.extra_containers = []
 
     def auth_state_hook(self, spawner, auth_state):
         # Turns out this is in the wrong place.  It should be called

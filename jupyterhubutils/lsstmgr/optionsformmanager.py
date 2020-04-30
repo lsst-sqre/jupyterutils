@@ -13,9 +13,12 @@ from .. import LoggableChild
 class LSSTOptionsFormManager(LoggableChild):
     '''Class to create and read a spawner form.
     '''
-    sizemap = {}
-    _scanner = None
-    options_form_data = None
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sizemap = {}
+        self._scanner = None
+        self.options_form_data = None
 
     def get_options_form(self):
         '''Create an LSST Options Form from parent's config object.

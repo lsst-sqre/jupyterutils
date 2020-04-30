@@ -65,7 +65,7 @@ class LSSTConfig(metaclass=Singleton):
             rootlogger.debug("Setting default log level to '{}'".format(level))
             rootlogger.setLevel(level)
             # There are some things we just don't want to log at DEBUG
-            chattycathies = ['kubernetes']
+            chattycathies = ['kubernetes', 'urllib3']
             for c in chattycathies:
                 lgr = logging.getLogger(c)
                 if lgr.getEffectiveLevel() < logging.WARNING:
