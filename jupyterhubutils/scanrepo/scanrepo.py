@@ -116,7 +116,6 @@ class ScanRepo(object):
             rm = self._results_map
             for tag in data.keys():
                 ihash = data[tag].get("hash")
-                ilayers = data[tag].get("layers")
                 updated = None
                 updatedstr = data[tag].get("updated")
                 if updatedstr:
@@ -125,8 +124,6 @@ class ScanRepo(object):
                     if (tag not in nm or (nm[tag]["updated"] < updated)):
                         nm[tag] = {"hash": ihash,
                                    "updated": updated}
-                        if ilayers:
-                            nm[tag]["layers"] = ilayers
                     if tag not in rm:
                         rm[tag] = {"last_updated": updatedstr,
                                    "name": tag}
@@ -246,7 +243,7 @@ class ScanRepo(object):
                 if ihash and dstr:
                     modmap[k] = {"updated": dstr,
                                  "hash": ihash}
-                return json.dumps(modmap, sort_keys=True, indent=4)
+            return json.dumps(modmap, sort_keys=True, indent=4)
 
     def _serialize_datetime(self, o):
         # Don't log this; it's way too noisy.
@@ -471,22 +468,22 @@ class ScanRepo(object):
                 else:
                     entry["updated"] = self._convert_time(res["last_updated"])
                     entry["hash"] = None
-                for res in reduced_results:
-                    if (res.startswith("r") and not
-                            res.startswith("recommended")):
-                        r_candidates.append(reduced_results[res])
-                    elif res.startswith("w"):
-                        w_candidates.append(reduced_results[res])
-                    elif res.startswith("d"):
-                        d_candidates.append(reduced_results[res])
-                    elif res.startswith("exp"):
-                        e_candidates.append(reduced_results[res])
-                    elif res.startswith("latest"):
-                        l_candidates.append(reduced_results[res])
-                    elif res.startswith("recommended"):
-                        c_candidates.append(reduced_results[res])
-                    else:
-                        o_candidates.append(res)
+            for res in reduced_results:
+                if (res.startswith("r") and not
+                        res.startswith("recommended")):
+                    r_candidates.append(reduced_results[res])
+                elif res.startswith("w"):
+                    w_candidates.append(reduced_results[res])
+                elif res.startswith("d"):
+                    d_candidates.append(reduced_results[res])
+                elif res.startswith("exp"):
+                    e_candidates.append(reduced_results[res])
+                elif res.startswith("latest"):
+                    l_candidates.append(reduced_results[res])
+                elif res.startswith("recommended"):
+                    c_candidates.append(reduced_results[res])
+                else:
+                    o_candidates.append(res)
             for clist in imgorder:
                 if sort_field != 'name':
                     clist.sort(key=lambda x: x[sort_field], reverse=True)
