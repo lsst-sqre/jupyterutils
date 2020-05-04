@@ -18,6 +18,7 @@ class Prepuller(object):
 
     def __init__(self, args=None):
         self.logger = make_logger()
+        self.repo = None
         if not args:
             raise ValueError("args must be set!")
         self.args = args
