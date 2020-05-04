@@ -12,10 +12,11 @@ from .. import LoggableChild
 class LSSTNamespaceManager(LoggableChild):
     '''Class to provide namespace manipulation.
     '''
-    parent = None
-    log = None
-    namespace = None
-    service_account = None  # Account for pod to run as
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.namespace = None
+        self.service_account = None  # Account for pod to run as
 
     def set_namespace(self, namespace):
         with start_action(action_type="set_namespace"):

@@ -84,15 +84,14 @@ class LSSTAuthManager(LoggableChild):
     Most of this was formerly held in the JupyterHub config as classes defined
     in '10-authenticator.py'.
     '''
-    authenticator = None
-    uid = None
-    group_map = {}        # key is group name, value is group id
-    auth_state = {}
-    pod_env = {}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.authenticator = self.parent.authenticator
+        self.uid = None
+        self.group_map = {}
+        self.auth_state = {}
+        self.pod_env = {}
 
     def get_fake_gid(self):
         '''Use if we have strict_ldap_groups off, to assign GIDs to names

@@ -11,7 +11,10 @@ class LSSTEnvironmentManager(LoggableChild):
 
     The environment should be regarded as immutable after creation.
     '''
-    pod_env = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.env = {}
 
     def create_pod_env(self):
         '''Return a dict mapping string to string for injection into the

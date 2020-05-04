@@ -18,64 +18,37 @@ class ScanRepo(object):
        Based on:
        https://github.com/shangteus/py-dockerhub/blob/master/dockerhub.py'''
 
-    host = 'hub.docker.com'
-    path = ''
-    owner = ''
-    name = ''
-    port = None
-    data = {}
-    debug = False
-    json = False
-    insecure = False
-    sort_field = "name"
-    experimentals = 0
-    dailies = 3
-    weeklies = 2
-    releases = 1
-    recommended = True
-    _results = None
-    _results_map = {}
-    _name_to_manifest = {}
-    _all_tags = []
-    logger = None
-    cachefile = None
-
-    def __init__(self, host='', path='', owner='', name='',
+    def __init__(self, host='hub.docker.com', path='', owner='', name='',
                  experimentals=0, dailies=3, weeklies=2, releases=1,
                  recommended=True,
                  json=False, port=None,
                  cachefile=None,
-                 insecure=False, sort_field="", debug=False):
-        if debug:
-            self.debug = debug
+                 insecure=False, sort_field="name", debug=False):
+        self.data = {}
+        self._results = None
+        self._results_map = {}
+        self._name_to_manifest = {}
+        self._all_tags = []
+        self.debug = debug
         self.logger = make_logger()
-        if debug:
+        if self.debug:
             self.logger.setLevel(logging.DEBUG)
             self.logger.debug("Debug logging enabled.")
-        if host:
-            self.host = host
-        if path:
-            self.path = path
-        if owner:
-            self.owner = owner
-        if name:
-            self.name = name
-        if experimentals is not None:
-            self.experimentals = experimentals
-        if dailies is not None:
-            self.dailies = dailies
-        if weeklies is not None:
-            self.weeklies = weeklies
-        if releases is not None:
-            self.releases = releases
-        if json:
-            self.json = json
+        self.host = host
+        self.path = path
+        self.owner = owner
+        self.name = name
+        self.experimentals = experimentals
+        self.dailies = dailies
+        self.weeklies = weeklies
+        self.releases = releases
+        self.recommended = recommended
+        self.json = json
         protocol = "https"
-        if insecure:
-            self.insecure = insecure
+        self.insecure = insecure
+        if self.insecure:
             protocol = "http"
-        if sort_field:
-            self.sort_field = sort_field
+        self.sort_field = sort_field
         exthost = self.host
         reghost = exthost
         if reghost == "hub.docker.com":
@@ -83,8 +56,8 @@ class ScanRepo(object):
         if port:
             exthost += ":" + str(port)
             reghost += ":" + str(port)
-        if cachefile:
-            self.cachefile = cachefile
+        self.cachefile = cachefile
+        if self.cachefile:
             self._read_cachefile()
         if not self.path:
             self.path = ("/v2/repositories/" + self.owner + "/" +
