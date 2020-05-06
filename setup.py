@@ -64,7 +64,8 @@ setuptools.setup(
         'eliot',
         'eliot-tree',
         'argo-workflows>=3.0.0,<3.2.0',
-        'argo-workflows-sdk'
+        'argo-workflows-sdk',
+        'asgiref>=3.0.0,<4.0.0'
     ],
     entry_points={
         'console_scripts': [

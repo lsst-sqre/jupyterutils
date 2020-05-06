@@ -15,9 +15,6 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     LSST-specific parts of our spawning requirements.
     '''
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     delete_namespace_on_stop = Bool(
         True,
         config=True,
@@ -166,6 +163,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         '''After stopping pod, delete the namespace if that option is set.
         '''
         with start_action(action_type="stop"):
+            self.log.debug("Attempting to stop user pod.")
             _ = yield super().stop(now)
             if self.delete_namespace_on_stop:
                 nsm = self.lsst_mgr.namespace_mgr
@@ -177,9 +175,6 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     def options_from_form(self, formdata=None):
         '''Delegate to form manager.
         '''
-        # LSST Manager sometimes unset when we make it here.  I don't
-        #  understand why that is.  Let's try moving the hooking up
-        #  lsst_mgr into __init__ rather than get_form_options.
         with start_action(action_type="options_from_form"):
             return self.lsst_mgr.optionsform_mgr.options_from_form(formdata)
 

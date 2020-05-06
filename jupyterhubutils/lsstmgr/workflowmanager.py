@@ -1,6 +1,7 @@
 import json
 import os
 from argo.workflows.sdk import Workflow, template
+from asgiref.sync import async_to_sync
 # This is just a K8s V1Container.
 from argo.workflows.sdk.templates import V1Container
 from eliot import start_action
@@ -73,7 +74,8 @@ class LSSTWorkflowManager(LoggableChild):
             vm = self.parent.volume_mgr
             am = self.parent.auth_mgr
             om = self.parent.optionsform_mgr
-            user = self.parent.parent.authenticator.user
+            user = self.parent.parent.spawner.user
+            # Maybe authenticator.user
             em_env = em.get_env()
             size_map = om.sizemap.get(data['size'])
             if not size_map:
@@ -128,7 +130,8 @@ class LSSTWorkflowManager(LoggableChild):
             env['CPU_GUARANTEE'] = str(cg)
             env['JUPYTERHUB_USER'] = user.escaped_name
             env['NONINTERACTIVE'] = "TRUE"
-            env['EXTERNAL_UID'] = str(user.auth_state['uid'])
+            ast = async_to_sync(user.get_auth_state)()
+            env['EXTERNAL_UID'] = str(ast['uid'])
             env['EXTERNAL_GROUPS'] = am.get_group_string()
             env['JUPYTERHUB_SERVER_PREFIX'] = jsp
             env['DEBUG'] = str_true(cfg.debug)
