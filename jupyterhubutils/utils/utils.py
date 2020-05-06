@@ -70,7 +70,7 @@ def _get_classname_from_frame(fr):
             # return its classname
             cl = getattr(instance, '__class__', None)
             if cl:
-                return cl.__name__
+                return cl.__qualname__
     # If it wasn't a class....
     return '<unknown>'
 
