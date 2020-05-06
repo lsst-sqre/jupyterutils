@@ -164,8 +164,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         '''
         with start_action(action_type="stop"):
             self.log.debug("Attempting to stop user pod.")
-            _ = yield super().stop(now)
-            self.log.debug("Back from stopping user pod.")
+            try:
+                _ = yield super().stop(now)
+            except TimeoutError:
+                self.log.warning("Pod timed out waiting to stop.")
             self.log.debug("Delete_namespace is {}.".format(
                 self.delete_namespace_on_stop))
             if self.delete_namespace_on_stop:
