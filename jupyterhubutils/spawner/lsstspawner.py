@@ -163,14 +163,17 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         '''After stopping pod, delete the namespace if that option is set.
         '''
         with start_action(action_type="stop"):
+            deleteme = self.delete_namespace_on_stop
             self.log.debug("Attempting to stop user pod.")
+            self.log.debug("delete_namespace_on_stop is {}".format(deleteme))
             try:
                 _ = yield super().stop(now)
+                self.log.debug("Superclass stop finished.")
             except TimeoutError:
                 self.log.warning("Pod timed out waiting to stop.")
-            self.log.debug("Delete_namespace is {}.".format(
-                self.delete_namespace_on_stop))
-            if self.delete_namespace_on_stop:
+            except Exception as err:
+                self.log.error("Got unexpected exception {}".format(err))
+            if deleteme:
                 nsm = self.lsst_mgr.namespace_mgr
                 self.log.debug("Attempting to delete namespace.")
                 self.asynchronize(nsm.maybe_delete_namespace)
