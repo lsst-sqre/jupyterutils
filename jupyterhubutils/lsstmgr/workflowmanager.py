@@ -74,8 +74,8 @@ class LSSTWorkflowManager(LoggableChild):
             vm = self.parent.volume_mgr
             am = self.parent.auth_mgr
             om = self.parent.optionsform_mgr
-            user = self.parent.parent.spawner.user
-            # Maybe authenticator.user
+            user = self.parent.parent.authenticator.user
+            # Definitely not spawner in this case.
             em_env = em.get_env()
             size_map = om.sizemap.get(data['size'])
             if not size_map:
