@@ -48,7 +48,7 @@ def make_logger(name=None, level=None):
         # Get name of caller's class.
         #  From https://stackoverflow.com/questions/17065086/
         frame = inspect.stack()[1][0]
-        class = _get_class_from_frame(frame)
+        name = _get_classname_from_frame(frame)
     logger = logging.getLogger(name)
     logger.propagate = False
     if level is None:
@@ -59,7 +59,7 @@ def make_logger(name=None, level=None):
     return logger
 
 
-def _get_class_from_frame(fr):
+def _get_classname_from_frame(fr):
     args, _, _, value_dict = inspect.getargvalues(fr)
     # we check the first parameter for the frame function is
     # named 'self'
