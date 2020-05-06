@@ -65,13 +65,15 @@ class LSSTConfig(metaclass=Singleton):
             rootlogger.debug("Setting default log level to '{}'".format(level))
             rootlogger.setLevel(level)
             # There are some things we just don't want to log at DEBUG
-            chattycathies = ['kubernetes', 'urllib3']
-            for c in chattycathies:
-                lgr = logging.getLogger(c)
-                if lgr.getEffectiveLevel() < logging.WARNING:
+            chattycathies = {'kubernetes': logging.WARNING,
+                             'urllib3': logging.WARNING,
+                             'JupyterHub': logging.INFO}
+            for k, v in chattycathies:
+                lgr = logging.getLogger(k)
+                if lgr.getEffectiveLevel() < v:
                     rootlogger.debug(
-                        "Forcing logger {} to WARNING level.".format(c))
-                    lgr.setLevel(logging.WARNING)
+                        "Forcing logger {} to level {}.".format(k, v))
+                    lgr.setLevel(v)
             self.log = make_logger(level=level)
 
     def load_from_environment(self):
