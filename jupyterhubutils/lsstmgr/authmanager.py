@@ -147,8 +147,7 @@ class LSSTAuthManager(LoggableChild):
             self.log.debug("Parsing authentication state.")
             pod_env = {}
             ast = async_to_sync(
-                self.parent.authenticator.user.get_auth_state)()
-            # possily should be self.parent.spawner.user.auth_state
+                self.parent.spawner.user.get_auth_state)()
             if not ast:
                 raise RuntimeError(
                     "Could not determine current user auth state!")
