@@ -75,7 +75,7 @@ class LSSTWorkflowManager(LoggableChild):
             am = self.parent.auth_mgr
             om = self.parent.optionsform_mgr
             user = self.parent.parent.authenticator.user
-            # Definitely not spawner in this case.
+            # Definitely not spawner in this case--spawner is mocked out.
             em_env = em.get_env()
             size_map = om.sizemap.get(data['size'])
             if not size_map:
