@@ -68,11 +68,13 @@ class LSSTConfig(metaclass=Singleton):
             chattycathies = {'kubernetes': logging.WARNING,
                              'urllib3': logging.WARNING,
                              'JupyterHub': logging.INFO}
-            for k, v in chattycathies:
+            for k in chattycathies:
+                v = chattycathies[k]
                 lgr = logging.getLogger(k)
-                if lgr.getEffectiveLevel() < v:
+                el = lgr.getEffectiveLevel()
+                if el < v:
                     rootlogger.debug(
-                        "Forcing logger {} to level {}.".format(k, v))
+                        "Logger {} @level {} -> {}.".format(k, el, v))
                     lgr.setLevel(v)
             self.log = make_logger(level=level)
 
