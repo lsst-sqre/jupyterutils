@@ -3,7 +3,6 @@ functions that are basically slightly-tailored versions of set
 manipulation, designed for doing things with user group membership.
 '''
 
-from tornado import gen
 import json
 import random
 from asgiref.sync import async_to_sync
@@ -127,7 +126,6 @@ class LSSTAuthManager(LoggableChild):
         with start_action(action_type="get_pod_env"):
             return self.pod_env
 
-    @gen.coroutine
     def parse_auth_state(self):
         '''Take the auth_state from parent.spawner and extract:
             * UID
@@ -148,7 +146,7 @@ class LSSTAuthManager(LoggableChild):
         with start_action(action_type="parse_auth_state"):
             self.log.debug("Parsing authentication state.")
             pod_env = {}
-            ast = yield(self.parent.spawner.user.get_auth_state())
+            ast = async_to_sync(self.parent.spawner.user.get_auth_state)()
             # possily should be self.parent.authenticator.user.auth_state
             if not ast:
                 raise RuntimeError(
