@@ -222,6 +222,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
                     )
                 else:
                     raise
+            self.log.debug("Sent delete request to K8s.")
             try:
                 yield exponential_backoff(
                     lambda: self.pod_reflector.pods.get((self.namespace,
@@ -238,3 +239,4 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
                     "restarting pod reflector")
                 self._start_watching_pods(replace=True)
                 raise
+            self.log.debug("Got to end of multispawner stop()")
