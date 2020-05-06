@@ -67,8 +67,11 @@ def _get_classname_from_frame(fr):
         # in that case, 'self' will be referenced in value_dict
         instance = value_dict.get('self', None)
         if instance:
-            # return its class
-            return getattr(instance, '__class__', '<unknown>')
+            # return its classname
+            cl = getattr(instance, '__class__', None)
+            if cl:
+                return cl.__name__
+    # If it wasn't a class....
     return '<unknown>'
 
 
