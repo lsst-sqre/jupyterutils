@@ -28,7 +28,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         if not self.log:
             self.log = make_logger()
         super().__init__(*args, **kwargs)
-        self.delete_grace_period = 3  # 30 seconds is ridiculous
+        self.delete_grace_period = 15  # K8s takes ten or so, usually
         self.rbac_api = shared_client('RbacAuthorizationV1Api')
 
         selected_pod_reflector_classref = MultiNamespacePodReflector
@@ -195,6 +195,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
     @gen.coroutine
     def stop(self, now=False):
         with start_action(action_type="stop"):
+            self.log.debug("Building request to delete user pod.")
             delete_options = client.V1DeleteOptions()
 
             if now:
