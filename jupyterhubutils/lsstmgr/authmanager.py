@@ -3,8 +3,10 @@ functions that are basically slightly-tailored versions of set
 manipulation, designed for doing things with user group membership.
 '''
 
+from tornado import gen
 import json
 import random
+from asgiref.sync import async_to_sync
 from eliot import start_action
 from .. import LoggableChild
 from ..utils import list_duplicates, sanitize_dict
@@ -90,8 +92,8 @@ class LSSTAuthManager(LoggableChild):
         self.authenticator = self.parent.authenticator
         self.uid = None
         self.group_map = {}
-        self.auth_state = {}
         self.pod_env = {}
+        # Do not set self.auth_state.  It gets incorrectly cached.
 
     def get_fake_gid(self):
         '''Use if we have strict_ldap_groups off, to assign GIDs to names
@@ -125,8 +127,9 @@ class LSSTAuthManager(LoggableChild):
         with start_action(action_type="get_pod_env"):
             return self.pod_env
 
+    @gen.coroutine
     def parse_auth_state(self):
-        '''Take the auth_state attribute and extract:
+        '''Take the auth_state from parent.spawner and extract:
             * UID
             * Group/gid mappings
             * Possibly-authenticator-specific fields for pod environment
@@ -145,10 +148,11 @@ class LSSTAuthManager(LoggableChild):
         with start_action(action_type="parse_auth_state"):
             self.log.debug("Parsing authentication state.")
             pod_env = {}
-            ast = self.auth_state
+            ast = yield(self.parent.spawner.user.get_auth_state())
+            # possily should be self.parent.authenticator.user.auth_state
             if not ast:
                 raise RuntimeError(
-                    "Authenticator did not set manager's auth state!")
+                    "Could not determine current user auth state!")
             cfg = self.parent.config
             authtype = cfg.authenticator_type
             if authtype == "github":
@@ -191,10 +195,11 @@ class LSSTAuthManager(LoggableChild):
     def dump(self):
         '''Return dict of contents for pretty-printing.
         '''
+        ast = async_to_sync(self.parent.spawner.user.get_auth_state)()
         pd = {"parent": str(self.parent),
               "uid": self.uid,
               "group_map": self.group_map,
-              "auth_state": sanitize_dict(self.auth_state, ['access_token']),
+              "auth_state": sanitize_dict(ast, ['access_token']),
               "pod_env": sanitize_dict(self.pod_env,
                                        ['ACCESS_TOKEN',
                                         'GITHUB_ACCESS_TOKEN'])}
