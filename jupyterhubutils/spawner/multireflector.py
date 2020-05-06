@@ -170,7 +170,8 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
                     if self._stop_event.is_set():
                         # self.log.info("%s watcher stopped", self.kind)
                         break
-            self.log.warning("%s watcher finished", self.kind)
+            #self.log.warning("%s watcher finished", self.kind)
+            self.log.debug("%s watcher finished", self.kind)
 
 
 class EventReflector(MultiNamespaceResourceReflector):

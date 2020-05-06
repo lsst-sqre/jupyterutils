@@ -3,6 +3,7 @@ Shared utility functions.
 '''
 
 import hashlib
+import inspect
 import logging
 import os
 
@@ -40,9 +41,14 @@ def get_execution_namespace():
     return None
 
 
-def make_logger(name=__name__, level=None):
+def make_logger(name=None, level=None):
     '''Create a logger with LSST-appropriate characteristics.
     '''
+    if name is None:
+        # Get name of caller's class.
+        #  From https://stackoverflow.com/questions/17065086/
+        frame = inspect.stack()[1][0]
+        name = _get_classname_from_frame(frame)
     logger = logging.getLogger(name)
     logger.propagate = False
     if level is None:
@@ -51,6 +57,22 @@ def make_logger(name=__name__, level=None):
     logger.handlers = [EliotHandler()]
     logger.info("Created logger object for class '{}'.".format(name))
     return logger
+
+
+def _get_classname_from_frame(fr):
+    args, _, _, value_dict = inspect.getargvalues(fr)
+    # we check the first parameter for the frame function is
+    # named 'self'
+    if len(args) and args[0] == 'self':
+        # in that case, 'self' will be referenced in value_dict
+        instance = value_dict.get('self', None)
+        if instance:
+            # return its classname
+            cl = getattr(instance, '__class__', None)
+            if cl:
+                return "{}.{}".format(cl.__module__, cl.__name__)
+    # If it wasn't a class....
+    return '<unknown>'
 
 
 def str_bool(s):
