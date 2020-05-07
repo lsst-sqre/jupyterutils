@@ -2,6 +2,8 @@
 namespaces, and with an lsst_mgr attribute.
 '''
 import json
+from .. import LSSTMiddleManager
+from ..config import LSSTConfig
 from .multispawner import MultiNamespacedKubeSpawner
 from eliot import start_action
 from kubespawner.objects import make_pod
@@ -42,8 +44,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         super().__init__(*args, **kwargs)
         self.log.debug("Creating LSSTSpawner.")
         # Our API and our RBAC API are set in the super() __init__()
-        # We assume that we're using an LSST Authenticator, which will
-        #  therefore have an LSST MiddleManager.
+        # We want our own LSST Manager per spawner.
         #
         # This might change with Argo Workflow.
         # self.log.debug("Spawner: {}".format(json.dumps(self.dump())))
@@ -56,13 +57,12 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         if not auth:
             self.log.error("No authenticator found!")
             raise RuntimeError("Could not create spawner!")
-        lm = auth.lsst_mgr
-        if not lm:
-            self.log.error("No LSST Manager found!")
-            raise RuntimeError("Could not create spawner!")
-        self.lsst_mgr = lm
-        lm.spawner = self
-        lm.user = user
+        self.lsst_mgr = LSSTMiddleManager(parent=self,
+                                          authenticator=auth,
+                                          config=LSSTConfig())
+
+        self.lsst_mgr.spawner = self
+        self.lsst_mgr.user = user
         self.log.debug("Initialized {}".format(__name__))
         self.wf_api = None
         self.delete_grace_period = 5
