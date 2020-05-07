@@ -2,7 +2,8 @@
 namespaces, and with an lsst_mgr attribute.
 '''
 import json
-from .. import LSSTMiddleManager, LSSTConfig
+from .. import LSSTMiddleManager
+from ..config import LSSTConfig
 from .multispawner import MultiNamespacedKubeSpawner
 from eliot import start_action
 from kubespawner.objects import make_pod
