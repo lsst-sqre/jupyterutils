@@ -73,6 +73,8 @@ class LSSTAuthenticator(Authenticator):
         in a timely fashion.
         '''
         with start_action(action_type="refresh_user"):
+            self.log.debug(
+                "User name in refresh_user is '{}'.".format(user.escaped_name))
             self.lsst_mgr.optionsform_mgr.options_form_data = None
             retval = await super().refresh_user(user, handler)
             return retval
