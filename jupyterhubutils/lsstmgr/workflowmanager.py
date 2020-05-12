@@ -135,8 +135,11 @@ class LSSTWorkflowManager(LoggableChild):
             env['EXTERNAL_GROUPS'] = am.get_group_string()
             env['JUPYTERHUB_SERVER_PREFIX'] = jsp
             env['DEBUG'] = str_true(cfg.debug)
-            # Get token, if we have one.
-            token = self.parent.parent.authenticator.token
+            # Get token, if we have one.  We want the one from the launching
+            #  lab container, if it exists.
+            # Try file first
+
+            token = self._get_access_token()
             if token:
                 env['ACCESS_TOKEN'] = token
             e_l = self._d2l(env)
@@ -164,6 +167,21 @@ class LSSTWorkflowManager(LoggableChild):
                 ll.append({"name": k,
                            "value": in_d[k]})
             return ll
+
+    def _get_access_token(self):
+        tok = None
+        hdir = os.environ.get('HOME', None)
+        if hdir:
+            tokfile = hdir + "/.access_token"
+            try:
+                with open(tokfile, 'r') as f:
+                    tok = f.read().replace('\n', '')
+            except Exception as exc:
+                self.log.warning(
+                    "Could not read token from '{}': {}'".format(tokfile, exc))
+        if not tok:
+            tok = os.environ.get('ACCESS_TOKEN', None)
+        return tok
 
     def list_workflows(self):
         with start_action(action_type="list_workflows"):
