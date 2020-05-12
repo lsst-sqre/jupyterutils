@@ -88,8 +88,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     def auth_state_hook(self, spawner, auth_state):
         # Turns out this is in the wrong place.  It should be called
         #  _before_ get_options_form()
-        super().auth_state_hook(spawner, auth_state)
         self.log.debug("{} auth_state_hook firing.".format(__name__))
+        self.log.debug(
+            "User name in auth_state_hook is '{}'.".format(self._log_name))
+        super().auth_state_hook(spawner, auth_state)
 
     @gen.coroutine
     def get_options_form(self):
@@ -104,6 +106,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # I suspect this to be somewhere near the heart of our concurrency
         #  problems.
         self.log.debug("Entering get_options_form()")
+        self.log.debug(
+            "User name in get_options_form is '{}'.".format(self._log_name))
         lm = self.lsst_mgr
         # Take the APIs from the api_manager
         self.api = lm.api_mgr.api
@@ -115,8 +119,9 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         if not auth_state:
             raise ValueError(
                 "Auth state empty for user {}".format(self.user))
-        self.log.debug("Setting auth_mgr's auth_state from user.")
-        lm.auth_mgr.auth_state = auth_state
+        # Don't set the auth_state
+        # self.log.debug("Setting auth_mgr's auth_state from user.")
+        # lm.auth_mgr.auth_state = auth_state
         self.log.debug("Parsing auth_state.")
         _ = yield self.asynchronize(lm.auth_mgr.parse_auth_state)
         # Will throw error if no UID
@@ -153,6 +158,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             #  so we have the namespace to spawn into, and the service account
             #  with appropriate roles and rolebindings.
             self.log.debug("Starting; creating namespace/ancillary objects.")
+            self.log.debug(
+                "User name in start() is '{}'.".format(self._log_name))
             self.set_user_namespace()  # Set namespace here/in namespace_mgr
             self.lsst_mgr.ensure_resources()
             retval = super().start()
@@ -165,6 +172,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         with start_action(action_type="lsstspawner_stop"):
             deleteme = self.delete_namespace_on_stop
             self.log.debug("Attempting to stop user pod.")
+            self.log.debug(
+                "User name in stop() is '{}'.".format(self._log_name))
             self.log.debug("delete_namespace_on_stop is {}".format(deleteme))
             try:
                 _ = yield super().stop(now)
@@ -191,6 +200,9 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # Run the superclass version, and then extract the fields
         with start_action(action_type="get_pod_manifest"):
             self.log.debug("Creating pod manifest.")
+            self.log.debug(
+                "User name in get_pod_manifest is '{}'.".format(
+                    self._log_name))
             orig_pod = yield super().get_pod_manifest()
             labels = orig_pod.metadata.labels.copy()
             annotations = orig_pod.metadata.annotations.copy()
