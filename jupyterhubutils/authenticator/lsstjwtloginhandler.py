@@ -33,17 +33,6 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             _ = yield(self._jwt_authenticate())
             yield super().post()
 
-    @staticmethod
-    def retrieve_username(self, claims, username_claim_field):
-        # retrieve the username from the claims
-        username = claims[username_claim_field]
-        if "@" in username:
-            # process username as if email, pull out string before '@' symbol
-            return username.split("@")[0].lower()
-        else:
-            # assume not username and return the user
-            return username.lower()
-
     @gen.coroutine
     def _jwt_authenticate(self):
         # This is taken from https://github.com/mogthesprog/jwtauthenticator
