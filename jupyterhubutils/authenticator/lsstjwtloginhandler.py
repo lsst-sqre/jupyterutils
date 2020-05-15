@@ -42,7 +42,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         # with start_action(action_type="_jwt_authenticate"):
         claims, token = yield self._check_auth_header()
         username_claim_field = self.authenticator.username_claim_field
-        username = self.retrieve_username(claims, username_claim_field)
+        username = self.retrieve_username(claims, username_claim_field).lower()
         user = self.user_from_username(username)
         # Here is where we deviate from the vanilla JWT authenticator.
         # We simply store all the JWT claims in auth_state, although we
@@ -69,7 +69,8 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
                 # Force re-login
                 return False
             username_claim_field = self.authenticator.username_claim_field
-            username = self.retrieve_username(claims, username_claim_field)
+            username = self.retrieve_username(
+                claims, username_claim_field).lower()
             auth_state = {"id": username,
                           "access_token": token,
                           "claims": claims}
