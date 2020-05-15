@@ -322,8 +322,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             #  be named "nb" plus the username and tag, to keep the pod name
             #  short.
             rt_tag = tag.replace('_', '-')
-            pn_template = "nb-{username}-" + rt_tag
-            pod_name = self._expand_user_properties(pn_template)
+            pod_name = "nb-{}-{}".format(self.user.escaped_name.lower(),
+                                         rt_tag)
             self.pod_name = pod_name
             self.log.debug(
                 "Replacing pod name from options form: %s" % pod_name)
