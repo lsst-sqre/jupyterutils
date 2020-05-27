@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import logging
 import os
+import requests
 
 from collections import defaultdict
 from eliot.stdlib import EliotHandler
@@ -21,6 +22,8 @@ def rreplace(s, old, new, occurrence):
 
 
 def sanitize_dict(input_dict, sensitive_fields):
+    '''Remove sensitive content.  Useful for logging.
+    '''
     retval = {}
     if not input_dict:
         return retval
@@ -150,9 +153,64 @@ def list_duplicates(seq):
 
 
 def list_digest(inp_list):
+    '''Return a digest to uniquely identify a list.
+    '''
     if type(inp_list) is not list:
         raise TypeError("list_digest only works on lists!")
     if not inp_list:
         raise ValueError("input must be a non-empty list!")
     # If we can rely on python >= 3.8, shlex.join is better
     return hashlib.sha256(' '.join(inp_list).encode('utf-8')).hexdigest()
+
+
+def get_access_token(tokenfile=None):
+    '''Determine the access token from the mounted secret or environment.
+    '''
+    tok = None
+    hdir = os.environ.get('HOME', None)
+    if hdir:
+        if not tokenfile:
+            # FIXME we should make this instance-dependent
+            tokfile = hdir + "/.access_token"
+        try:
+            with open(tokfile, 'r') as f:
+                tok = f.read().replace('\n', '')
+        except Exception as exc:
+            log = make_logger()
+            log.warn("Could not read tokenfile '{}': {}".format(tokfile, exc))
+    if not tok:
+        tok = os.environ.get('ACCESS_TOKEN', None)
+    return tok
+
+
+def parse_access_token(endpoint=None, tokenfile=None, token=None, timeout=15):
+    '''Rely on gafaelfawr to validate and parse the access token.
+    '''
+    if not token:
+        token = get_access_token(tokenfile=tokenfile)
+    if not token:
+        raise RuntimeError("Cannot determine access token!")
+    # Endpoint is constant in an ArgoCD-deployed cluster
+    if not endpoint:
+        endpoint = "http://gafaelfawr-service.gafaelfawr:8080/auth/analyze"
+    resp = requests.post(endpoint, data={'token': token}, timeout=timeout)
+    rj = resp.json()
+    p_resp = rj["token"]
+    if not p_resp["valid"]:
+        raise RuntimeError("Access token is invalid!")
+    # Force to lowercase username (should no longer be necessary)
+    p_tok = p_resp["data"]
+    uname = p_tok["uid"]
+    p_tok["uid"] = uname.lower()
+    return p_tok
+
+
+def assemble_gids(groupinfo):
+    '''Take the group data (in the format of a CILogon "isMemberOf" claim)
+    and return the string to be used for provisioning the user.
+
+    Simply ignore names without corresponding ids.
+    '''
+    gidlist = ["{}:{}".format(x['name'], x['id'])
+               for x in groupinfo if 'id' in x]
+    return ','.join(gidlist)
