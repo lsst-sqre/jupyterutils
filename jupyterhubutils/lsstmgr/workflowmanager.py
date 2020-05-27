@@ -1,7 +1,6 @@
 import json
 import os
 from argo.workflows.sdk import Workflow, template
-from asgiref.sync import async_to_sync
 # This is just a K8s V1Container.
 from argo.workflows.sdk.templates import V1Container
 from eliot import start_action
@@ -9,7 +8,7 @@ from kubernetes.client import V1ResourceRequirements, V1SecurityContext
 from kubernetes.client.rest import ApiException
 from kubernetes import client
 from .. import LoggableChild
-from ..utils import list_digest, str_true
+from ..utils import list_digest, str_true, parse_access_token, assemble_gids
 
 
 class LSSTWorkflowManager(LoggableChild):
@@ -72,10 +71,18 @@ class LSSTWorkflowManager(LoggableChild):
             cfg = self.parent.config
             em = self.parent.env_mgr
             vm = self.parent.volume_mgr
-            am = self.parent.auth_mgr
             om = self.parent.optionsform_mgr
-            user = self.parent.parent.authenticator.user
-            # Definitely not spawner in this case--spawner is mocked out.
+            # We do not use user from our class hierarchy.  Instead, we
+            #  require the access token to be set in the incoming data
+            #  and parse the information from it via gafaelfawr's
+            #  /auth/analyze endpoint.
+            #
+            # This does mean that we require gafaelfawr.
+            access_token = data['access_token']
+            p_tok = parse_access_token(token=access_token)
+            username = p_tok["uid"]
+            uid = p_tok["uidNumber"]
+            gids = assemble_gids(p_tok["isMemberOf"])
             em_env = em.get_env()
             size_map = om.sizemap.get(data['size'])
             if not size_map:
@@ -101,7 +108,7 @@ class LSSTWorkflowManager(LoggableChild):
             # then make up something plausible, but it really doesn't
             # matter if we get it right, because it's not like we're
             # using the Dask proxy dashboard from inside a Workflow anyway.
-            synth_jsp = '/nb/user/{}'.format(user.escaped_name)
+            synth_jsp = '/nb/user/{}'.format(username)
             jsp = os.getenv('JUPYTERHUB_SERVER_PREFIX', synth_jsp)
             wf_input['mem_limit'] = ml
             wf_input['mem_guar'] = mg
@@ -120,7 +127,7 @@ class LSSTWorkflowManager(LoggableChild):
             vmts.append(self.cmd_mt)
             env['DASK_VOLUME_B64'] = vm.get_dask_volume_b64()
             cname = "wf-{}-{}-{}".format(
-                user.escaped_name,
+                username,
                 data['image'].split(':')[-1].replace('_', '-'),
                 data['command'][0].split('/')[-1].replace('_', '-'))
             wf_input['name'] = cname
@@ -128,23 +135,18 @@ class LSSTWorkflowManager(LoggableChild):
             env['MEM_GUARANTEE'] = mg
             env['CPU_LIMIT'] = str(cl)
             env['CPU_GUARANTEE'] = str(cg)
-            env['JUPYTERHUB_USER'] = user.escaped_name
+            env['JUPYTERHUB_USER'] = username
             env['NONINTERACTIVE'] = "TRUE"
-            ast = async_to_sync(user.get_auth_state)()
-            env['EXTERNAL_UID'] = str(ast['uid'])
-            env['EXTERNAL_GROUPS'] = am.get_group_string()
+            env['EXTERNAL_UID'] = uid
+            env['EXTERNAL_GROUPS'] = gids
             env['JUPYTERHUB_SERVER_PREFIX'] = jsp
             env['DEBUG'] = str_true(cfg.debug)
-            # Get token, if we have one.  We want the one from the launching
-            #  lab container, if it exists.
-            # Try file first
-
-            token = self._get_access_token()
-            if token:
-                env['ACCESS_TOKEN'] = token
+            # We must have a token, or we would not have been able to
+            #  parse it earlier.
+            env['ACCESS_TOKEN'] = access_token
             e_l = self._d2l(env)
             wf_input['env'] = e_l
-            wf_input['username'] = user.escaped_name
+            wf_input['username'] = username
             # Volumes and mounts aren't JSON-serializable...
             wf_input['vols'] = '{}'.format(vols)
             wf_input['vmts'] = '{}'.format(vmts)
@@ -167,21 +169,6 @@ class LSSTWorkflowManager(LoggableChild):
                 ll.append({"name": k,
                            "value": in_d[k]})
             return ll
-
-    def _get_access_token(self):
-        tok = None
-        hdir = os.environ.get('HOME', None)
-        if hdir:
-            tokfile = hdir + "/.access_token"
-            try:
-                with open(tokfile, 'r') as f:
-                    tok = f.read().replace('\n', '')
-            except Exception as exc:
-                self.log.warning(
-                    "Could not read token from '{}': {}'".format(tokfile, exc))
-        if not tok:
-            tok = os.environ.get('ACCESS_TOKEN', None)
-        return tok
 
     def list_workflows(self):
         with start_action(action_type="list_workflows"):
