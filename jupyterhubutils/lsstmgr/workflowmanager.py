@@ -224,6 +224,13 @@ class LSSTWorkflowManager(LoggableChild):
         with start_action(action_type="submit_workflow"):
             self.define_workflow(data)
             nm = self.parent.namespace_mgr
+            # Force namespace from access_token by forcing user
+            # from access_token
+            user = nm.parent.user
+            self.log.debug("submit_workflow user class: {}".format(
+                user.__class__.__name__))
+            self.log.debug(
+                "submit_workflow username: {}".format(user.escaped_name))
             nm.ensure_namespace()
             nm.ensure_namespaced_service_account()
             wf = self.create_workflow()
@@ -259,13 +266,12 @@ class LSSTWorkflowManager(LoggableChild):
 
 
 class LSSTWorkflow(Workflow):
-    parms = {}
-    entrypoint = "noninteractive"
-    run_as_user = 769
-    run_as_group = 769
 
     def __init__(self, *args, **kwargs):
-        self.parms = kwargs.pop('parms')
+        self.parms = kwargs.pop('parms', {})
+        self.entrypoint = "noninteractive"
+        self.run_as_user = 769
+        self.run_as_group = 769
         super().__init__(*args, **kwargs)
         self.spec.volumes = self.parms['vols']
         lbl = {'argocd.argoproj.io/instance': 'nublado-users'}
