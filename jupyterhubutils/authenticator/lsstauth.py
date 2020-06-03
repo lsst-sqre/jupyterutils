@@ -30,8 +30,6 @@ class LSSTAuthenticator(Authenticator):
         self.enable_auth_state = True
         self.delete_invalid_users = True
         self.token = None
-        # Token is only used for JWT, but we want it as a generic
-        # field for the workflow manager.
 
     def resolve_cilogon(self, membership):
         '''Shared between CILogon and JWT (which uses CILogon as its backing

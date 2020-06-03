@@ -45,10 +45,6 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         self.log.debug("Creating LSSTSpawner.")
         # Our API and our RBAC API are set in the super() __init__()
         # We want our own LSST Manager per spawner.
-        #
-        # This might change with Argo Workflow.
-        # self.log.debug("Spawner: {}".format(json.dumps(self.dump())))
-        self.log.debug("Setting LSST Manager from authenticated user.")
         user = self.user
         if not user:
             self.log.error("No user found!")
@@ -57,14 +53,13 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         if not auth:
             self.log.error("No authenticator found!")
             raise RuntimeError("Could not create spawner!")
+        self.log.debug("Creating LSST Manager from authenticated user.")
         self.lsst_mgr = LSSTMiddleManager(parent=self,
                                           authenticator=auth,
+                                          spawner=self,
+                                          user=user,
                                           config=LSSTConfig())
-
-        self.lsst_mgr.spawner = self
-        self.lsst_mgr.user = user
         self.log.debug("Initialized {}".format(__name__))
-        self.wf_api = None
         self.delete_grace_period = 5
         # In our LSST setup, there is a "provisionator" user, uid/gid 769,
         #  that is who we should start as.
@@ -112,7 +107,6 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # Take the APIs from the api_manager
         self.api = lm.api_mgr.api
         self.rbac_api = lm.api_mgr.rbac_api
-        self.wf_api = lm.api_mgr.wf_api
         om = lm.optionsform_mgr
         self.log.debug("Requesting auth state")
         auth_state = yield self.user.get_auth_state()

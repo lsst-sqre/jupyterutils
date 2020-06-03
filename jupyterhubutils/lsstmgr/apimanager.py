@@ -1,11 +1,9 @@
-import argo
 import json
 from .. import LoggableChild
 from .. import Singleton
 from kubespawner.clients import shared_client
 from kubernetes.config import load_incluster_config, load_kube_config
 from kubernetes.config.config_exception import ConfigException
-from argo.workflows.client import V1alpha1Api
 
 
 class LSSTAPIManager(LoggableChild, metaclass=Singleton):
@@ -14,18 +12,12 @@ class LSSTAPIManager(LoggableChild, metaclass=Singleton):
         super().__init__(*args, **kwargs)
         try:
             load_incluster_config()
-            argo.workflows.config.load_incluster_config()
         except ConfigException:
             self.log.warning("In-cluster config failed! Falling back.")
             try:
                 load_kube_config()
-                argo.workflows.config.load_kube_config()
             except ValueError as exc:
                 self.log.error("Still errored: {}".format(exc))
-        wf_api = kwargs.pop('wf_api', None)
-        if not wf_api:
-            wf_api = V1alpha1Api()
-        self.wf_api = wf_api
         rbac_api = kwargs.pop('rbac_api', None)
         if not rbac_api:
             rbac_api = shared_client('RbacAuthorizationV1Api')
@@ -41,7 +33,6 @@ class LSSTAPIManager(LoggableChild, metaclass=Singleton):
         ad = {"parent": str(self.parent),
               "api": str(self.api),
               "rbac_api": str(self.rbac_api),
-              "wf_api": str(self.wf_api)
               }
         return ad
 
