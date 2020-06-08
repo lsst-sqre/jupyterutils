@@ -1,11 +1,11 @@
 '''LSST Login Handler to use JWT token present in request headers.
 '''
-import datetime
 from eliot import start_action
 from tornado import gen, web
 from jupyterhub.utils import url_path_join
 from jwtauthenticator.jwtauthenticator import JSONWebTokenLoginHandler
 from ..lsstmgr import check_membership
+from ..utils import parse_access_token
 
 
 class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
@@ -61,12 +61,19 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         '''Validate the token and force re-auth if the claims are not
         (presumably no longer) valid.
         '''
-        with start_action(action_type="refresh_user"):
-            self.log.debug("Refreshing user data.")
+        with start_action(action_type="refresh_user_loginhandler"):
+            uname = user.escaped_name
+            self.log.debug(
+                "Entering refresh_user() on jwtloginhandler for '{}'.".format(
+                    uname))
             try:
+                self.log.debug("Checking auth header for '{}'.".format(uname))
                 claims, token = yield self._check_auth_header()
+                self.log.debug("Checked auth header for '{}'.".format(uname))
             except web.HTTPError:
                 # Force re-login
+                self.log.debug(
+                    "Auth header check for '{}' failed.".format(uname))
                 return False
             username_claim_field = self.authenticator.username_claim_field
             username = self.retrieve_username(
@@ -74,6 +81,9 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             auth_state = {"id": username,
                           "access_token": token,
                           "claims": claims}
+            self.log.debug(
+                "Finished jwtloginhandler refresh_user for '{}'.".format(
+                    uname))
             return auth_state
 
     @gen.coroutine
@@ -83,15 +93,11 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             #  or throws a web error of some type.
             self.log.debug("Checking authentication header.")
             auth = self.authenticator
-            cfg = auth.lsst_mgr.config
             header_name = auth.header_name
             param_name = auth.param_name
             header_is_authorization = auth.header_is_authorization
             auth_header_content = self.request.headers.get(header_name, "")
             auth_cookie_content = self.get_cookie("XSRF-TOKEN", "")
-            signing_certificate = cfg.jwt_signing_certificate
-            secret = auth.secret
-            audience = cfg.audience
             tokenParam = self.get_argument(param_name, default=False)
             if auth_header_content and tokenParam:
                 self.log.error("Authentication: both an authentication " +
@@ -115,23 +121,12 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             else:
                 self.log.error("Could not determine authentication token.")
                 raise web.HTTPError(401)
-            claims = ""
-            if secret:
-                claims = self.verify_jwt_using_secret(token, secret, audience)
-            elif signing_certificate:
-                claims = self.verify_jwt_with_claims(token,
-                                                     signing_certificate,
-                                                     audience)
-            else:
-                self.log.error("Could not verify JWT.")
-                raise web.HTTPError(401)
-            # Check expiration
-            expiry = int(claims['exp'])
-            now = int(datetime.datetime.utcnow().timestamp())
-            if now > expiry:
-                self.log.error("JWT has expired!")
-                raise web.HTTPError(401)
-            auth.token = token
+            # Delegate to gafaelfawr for validation.
+            self.log.debug("Sending token to gafaelfawr for validation.")
+            claims = parse_access_token(token=token)
+            uname = claims['uid']
+            self.log.debug(
+                "Gafaelfawr validated token for '{}'.".format(uname))
             return claims, token
 
     def _jwt_validate_user(self, auth_state):

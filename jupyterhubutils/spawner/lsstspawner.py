@@ -86,7 +86,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         self.log.debug("{} auth_state_hook firing.".format(__name__))
         self.log.debug(
             "User name in auth_state_hook is '{}'.".format(self._log_name))
-        super().auth_state_hook(spawner, auth_state)
+        if hasattr(super(), 'auth_state_hook') and super().auth_state_hook:
+            super().auth_state_hook(spawner, auth_state)
+        else:
+            self.log.debug("No superclass auth_state_hook to call.")
 
     @gen.coroutine
     def get_options_form(self):

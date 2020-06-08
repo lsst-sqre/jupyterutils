@@ -8,5 +8,7 @@ from .reaperstandalone import reaperstandalone
 from .prepuller import Prepuller
 from .prepullerstandalone import prepullerstandalone
 from .parse_args import parse_args
+from .primerepocache import prime_repo_cache
 __all__ = [ScanRepo, SingletonScanner, Reaper, Prepuller,
-           standalone, reaperstandalone, prepullerstandalone, parse_args]
+           standalone, reaperstandalone, prepullerstandalone, parse_args,
+           prime_repo_cache]

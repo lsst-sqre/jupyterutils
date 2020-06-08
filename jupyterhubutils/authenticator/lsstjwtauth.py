@@ -42,9 +42,23 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
         #  It's cheating, but we'll just check to see if there is
         #  a custom method for refresh_user on the handler and call it
         #  if so.  That's true for the LSST JWT Authenticator case.
-        with start_action(action_type="refresh_user"):
+        with start_action(action_type="refresh_user_lsstjwtauth"):
+            uname = user.escaped_name
+            self.log.debug(
+                "Entering lsstjwtauth refresh_user() for '{}'".format(uname))
+            self.log.debug(
+                "Calling superclass refresh_user for '{}'.".format(uname))
             retval = await super().refresh_user(user, handler)
+            self.log.debug(
+                "Returned from  superclass refresh_user for '{}'.".format(
+                    uname))
             if hasattr(handler, 'refresh_user'):
-                return await handler.refresh_user(user, handler)
-            else:
-                return retval
+                self.log.debug("Handler has refresh_user too.")
+                self.log.debug(
+                    "Calling handler's refresh_user() for '{}'.".format(uname))
+                retval = await handler.refresh_user(user, handler)
+                self.log.debug(
+                    "Returned from handler refresh_user for '{}'.".format(
+                        uname))
+            self.log.debug("Finished with lsstjwtauth refresh_user.")
+            return retval

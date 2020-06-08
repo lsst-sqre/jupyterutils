@@ -29,10 +29,12 @@ class LSSTOptionsFormManager(LoggableChild):
             #
             # If that's not OK (long-lived tokens, for example) then in
             #  your authenticator's refresh_user(), clear options_form_data.
-            self.log.debug("Creating options form.")
+            uname = self.parent.user.escaped_name
+            self.log.debug("Creating options form for '{}'".format(uname))
             if self.options_form_data:
                 self.log.debug("Returning cached options form.")
                 return self.options_form_data
+            self.log.debug("Regenerating form_data for '{}'.".format(uname))
             cfg = self.parent.config
             scanner = SScan(host=cfg.lab_repo_host,
                             owner=cfg.lab_repo_owner,
@@ -44,7 +46,9 @@ class LSSTOptionsFormManager(LoggableChild):
                             cachefile=cfg.prepuller_cachefile,
                             debug=cfg.debug)
             self._scanner = scanner
+            self.log.debug("Calling _sync_scan() for '{}'.".format(uname))
             self._sync_scan()
+            self.log.debug("Back from _sync_scan() for '{}'.".format(uname))
             lnames, ldescs = scanner.extract_image_info()
             desclist = []
             # Setting this up to pass into the Jinja template more easily
@@ -59,7 +63,11 @@ class LSSTOptionsFormManager(LoggableChild):
             if not now.tzinfo:
                 # If we don't have tzinfo, assume it's in UTC
                 nowstr += " UTC"
+            self.log.debug(
+                "About to call _make_sizemap() for '{}'.".format(uname))
             self._make_sizemap()
+            self.log.debug(
+                "Back from _make_sizemap() for '{}'.".format(uname))
             # in order to get the right default size index, we need to poke the
             #  quota manager, because different users may get different sizes
             #  by default
@@ -80,16 +88,23 @@ class LSSTOptionsFormManager(LoggableChild):
                 sizelist=list(self.sizemap.values()),
                 nowstr=nowstr)
             self.options_form_data = optform
+            self.log.debug(
+                "Generated options_form_data for '{}'.".format(uname))
             return optform
 
     def resolve_tag(self, tag):
         '''Delegate to scanner to resolve convenience tags.
         '''
         with start_action(action_type="resolve_tag"):
-            return self._scanner.resolve_tag(tag)
+            self.log.debug("Resolving tag for '{}'.".format(tag))
+            rtag = self._scanner.resolve_tag(tag)
+            self.log.debug("Resolved tag for '{}'->'{}'.".format(tag, rtag))
+            return rtag
 
     def _sync_scan(self):
         with start_action(action_type="_sync_scan"):
+            uname = self.parent.user.escaped_name
+            self.log.debug("Entering _sync_scan() for '{}'.".format(uname))
             scanner = self._scanner
             cfg = self.parent.config
             delay_interval = cfg.initial_scan_interval
@@ -110,9 +125,12 @@ class LSSTOptionsFormManager(LoggableChild):
                     errstr = ("Scan results did not become available in " +
                               "{}s.".format(max_delay))
                     raise RuntimeError(errstr)
+            self.log.debug("Completed _sync_scan() for '{}'.".format(uname))
 
     def _make_sizemap(self):
         with start_action(action_type="_make_sizemap"):
+            uname = self.parent.user.escaped_name
+            self.log.debug("Entering _make_sizemap() for '{}'.".format(uname))
             sizemap = OrderedDict()
             # For supported Python versions, dict is ordered anyway...
             sizes = self.parent.config.form_sizelist
@@ -138,6 +156,7 @@ class LSSTOptionsFormManager(LoggableChild):
                 idx = idx + 1
             # Clean up if list of sizes changed.
             self.sizemap = sizemap
+            self.log.debug("Finished _make_sizemap() for '{}'.".format(uname))
 
     def options_from_form(self, formdata=None):
         '''Get user selections.

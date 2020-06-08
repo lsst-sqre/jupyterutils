@@ -1,16 +1,17 @@
 # Inspired by, and based on, Adam Tilghman's Multi-Namespace work in
 #  https://github.com/jupyterhub/kubespawner/pull/218
+import threading
 import time
 from eliot import start_action
 from kubernetes import watch
-from kubespawner.reflector import NamespacedResourceReflector
+from .lsstreflector import LSSTResourceReflector
 from traitlets import Bool
 # This is kubernetes client implementation specific, but we need to know
 # whether it was a network or watch timeout.
 from urllib3.exceptions import ReadTimeoutError
 
 
-class MultiNamespaceResourceReflector(NamespacedResourceReflector):
+class MultiNamespaceResourceReflector(LSSTResourceReflector):
     list_method_omit_namespace = Bool(
         False,
         help="""
@@ -19,6 +20,17 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
         `list_pod_for_all_namespaces`
         """
     )
+
+    def _start_watching_pods(self, replace=False):
+        """Start the pod reflector
+
+        If replace=False and the pod reflector is already running,
+        do nothing.
+
+        If replace=True, a running pod reflector will be stopped
+        and a new one started (for recovering from possible errors).
+        """
+        return self._start_reflector("pods", LSSTPodReflector, replace=replace)
 
     def _create_resource_key(self, resource):
         """Maps a Kubernetes resource object onto a hashable Dict key;
@@ -79,17 +91,7 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
                 selectors.append("label selector=%r" % self.label_selector)
             if self.field_selector:
                 selectors.append("field selector=%r" % self.field_selector)
-            log_selector = ', '.join(selectors)
-
             cur_delay = 0.1
-            ns = self.namespace
-            if self.list_method_omit_namespace:
-                ns = "[GLOBAL]"
-
-            # self.log.info(
-            #    "watching for %s with %s in namespace %s",
-            #    self.kind, log_selector, ns,
-            # )
             while True:
                 start = time.monotonic()
                 w = watch.Watch()
@@ -130,22 +132,14 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
                             self.resources[self._create_resource_key(
                                 resource)] = resource
                             if self._stop_event.is_set():
-                                # self.log.info("%s watcher stopped",
-                                #     self.kind)
                                 break
                     watch_duration = time.monotonic() - start
                     if watch_duration >= self.restart_seconds:
-                        # self.log.debug(
-                        #    "Restarting %s watcher after %i seconds",
-                        #    self.kind, watch_duration,
-                        # )
                         break
                 except ReadTimeoutError:
                     # network read time out, just continue and restart
                     # the watch; this could be due to a network problem
                     # or just low activity
-                    # self.log.warning(
-                    #    "Read timeout watching %s, reconnecting", self.kind)
                     continue
                 except Exception:
                     cur_delay = cur_delay * 2
@@ -162,19 +156,34 @@ class MultiNamespaceResourceReflector(NamespacedResourceReflector):
                     continue
                 else:
                     # no events on watch, reconnect
-                    # This is super-spammy, so don't log it
-                    # self.log.debug("%s watcher timeout", self.kind)
                     pass
                 finally:
                     w.stop()
                     if self._stop_event.is_set():
-                        # self.log.info("%s watcher stopped", self.kind)
                         break
-            #self.log.warning("%s watcher finished", self.kind)
-            self.log.debug("%s watcher finished", self.kind)
+
+    def start(self):
+        """
+        Start the reflection process!
+
+        We'll do a blocking read of all resources first, so that we don't
+        race with any operations that are checking the state of the pod
+        store - such as polls. This should be called only once at the
+        start of program initialization (when the singleton is being created),
+        and not afterwards!
+        """
+        if hasattr(self, 'watch_thread'):
+            raise ValueError('Thread watching for resources is already running'
+                             )
+
+        self._list_and_update()
+        self.watch_thread = threading.Thread(target=self._watch_and_update)
+        # If the watch_thread is only thread left alive, exit app
+        self.watch_thread.daemon = True
+        self.watch_thread.start()
 
 
-class EventReflector(MultiNamespaceResourceReflector):
+class MultiEventReflector(MultiNamespaceResourceReflector):
     kind = 'events'
 
     list_method_name = 'list_namespaced_event'
@@ -187,7 +196,7 @@ class EventReflector(MultiNamespaceResourceReflector):
         )
 
 
-class PodReflector(MultiNamespaceResourceReflector):
+class LSSTPodReflector(MultiNamespaceResourceReflector):
     kind = 'pods'
     # FUTURE: These labels are the selection labels for the PodReflector. We
     # might want to support multiple deployments in the same namespace, so we
@@ -204,7 +213,7 @@ class PodReflector(MultiNamespaceResourceReflector):
         return self.resources
 
 
-class MultiNamespacePodReflector(PodReflector):
+class MultiNamespacePodReflector(LSSTPodReflector):
     list_method_name = 'list_pod_for_all_namespaces'
     list_method_omit_namespace = True
 

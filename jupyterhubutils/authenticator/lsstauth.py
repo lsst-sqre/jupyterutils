@@ -70,9 +70,14 @@ class LSSTAuthenticator(Authenticator):
         per user session, which is not frequent enough to display new images
         in a timely fashion.
         '''
-        with start_action(action_type="refresh_user"):
+        with start_action(action_type="refresh_user_lsstauth"):
+            uname = user.escaped_name
             self.log.debug(
-                "User name in refresh_user is '{}'.".format(user.escaped_name))
+                "Entering lsstauth refresh_user for '{}'.".format(uname))
             self.lsst_mgr.optionsform_mgr.options_form_data = None
+            self.log.debug("Calling superclass's refresh_user().")
             retval = await super().refresh_user(user, handler)
+            self.log.debug("Returned from superclass's refresh_user().")
+            self.log.debug(
+                "Finished lsstauth refresh_user for '{}'".format(uname))
             return retval
