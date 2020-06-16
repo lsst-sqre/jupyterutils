@@ -29,10 +29,11 @@ from ._version import __version__
 
 __all__ = [LSSTMiddleManager, check_membership, Prepuller, Reaper,
            ScanRepo, Singleton, SingletonScanner, LSSTSpawner,
-           LSSTCILogonOAuthenticator, LSSTGitHubOAuthenticator,
-           LSSTJWTAuthenticator, rreplace, sanitize_dict,
-           get_execution_namespace, make_logger, str_bool, str_true,
-           listify, intify, floatify, list_duplicates, list_digest,
-           get_access_token, parse_access_token, assemble_gids,
-           LSSTConfig, configure_auth_and_spawner, Loggable, LoggableChild,
+           LSSTCILogonOAuthenticator,
+           LSSTGitHubOAuthenticator, LSSTJWTAuthenticator, rreplace,
+           sanitize_dict, get_execution_namespace, make_logger,
+           str_bool, str_true, listify, intify, floatify,
+           list_duplicates, list_digest, get_access_token,
+           parse_access_token, assemble_gids, LSSTConfig,
+           configure_auth_and_spawner, Loggable, LoggableChild,
            __version__]

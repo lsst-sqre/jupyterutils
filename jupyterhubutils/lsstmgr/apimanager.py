@@ -1,7 +1,7 @@
 import json
 from .. import LoggableChild
 from .. import Singleton
-from kubespawner.clients import shared_client
+from kubernetes.client import CoreV1Api, RbacAuthorizationV1Api
 from kubernetes.config import load_incluster_config, load_kube_config
 from kubernetes.config.config_exception import ConfigException
 
@@ -20,11 +20,11 @@ class LSSTAPIManager(LoggableChild, metaclass=Singleton):
                 self.log.error("Still errored: {}".format(exc))
         rbac_api = kwargs.pop('rbac_api', None)
         if not rbac_api:
-            rbac_api = shared_client('RbacAuthorizationV1Api')
+            rbac_api = RbacAuthorizationV1Api()
         self.rbac_api = rbac_api
         api = kwargs.pop('api', None)
         if not api:
-            api = shared_client('CoreV1Api')
+            api = CoreV1Api()
         self.api = api
 
     def dump(self):

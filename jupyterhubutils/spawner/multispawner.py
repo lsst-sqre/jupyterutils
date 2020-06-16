@@ -6,16 +6,16 @@ This module exports `NamespacedKubeSpawner` class, which is the spawner
 implementation that should be used by JupyterHub.
 '''
 
+import sys
 from eliot import start_action
 from jupyterhub.utils import exponential_backoff
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from kubernetes.config.config_exception import ConfigException
 from kubespawner import KubeSpawner
-from kubespawner.clients import shared_client
 from tornado import gen
 from tornado.ioloop import IOLoop
-from .multireflector import MultiNamespacePodReflector, EventReflector
+from .multireflector import MultiNamespacePodReflector, MultiEventReflector
 from ..utils import make_logger
 
 
@@ -28,49 +28,13 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         if not self.log:
             self.log = make_logger()
         super().__init__(*args, **kwargs)
-        self.delete_grace_period = 15  # K8s takes ten or so, usually
-        self.rbac_api = shared_client('RbacAuthorizationV1Api')
-
-        selected_pod_reflector_classref = MultiNamespacePodReflector
-        selected_event_reflector_classref = EventReflector
+        self.delete_grace_period = 25  # K8s takes ten or so, usually
         self.namespace = self.get_user_namespace()
         try:
             self.log.debug("Loading K8s config.")
             config.load_incluster_config()
         except ConfigException:
             config.load_kube_config()
-
-        main_loop = IOLoop.current()
-
-        def on_pod_reflector_failure():
-            self.log.critical("Pod reflector failed, halting Hub.")
-            main_loop.stop()
-
-        # Replace pod_reflector
-        self.__class__.pod_reflector = selected_pod_reflector_classref(
-            parent=self, namespace=self.namespace,
-            on_failure=on_pod_reflector_failure
-        )
-        self.log.debug("Created new pod reflector: " +
-                       "%r" % self.__class__.pod_reflector)
-        self._start_watching_pods(replace=True)
-
-        # And event_reflector
-        self.__class__.event_reflector = selected_event_reflector_classref(
-            parent=self, namespace=self.namespace)
-
-        # Defer event watcher startup to auth_state_hook to prevent
-        #  initialization loop
-        self.log.debug("MultiNamespaceSpawner initialized.")
-
-    def auth_state_hook(self, spawner, auth_state):
-        with start_action(action_type="auth_state_hook"):
-            # Start the watchers.
-            # Restart pod/event watcher
-            self.log.debug("{} auth_state_hook firing.".format(__name__))
-            if self.events_enabled:
-                self._start_watching_events(replace=True)
-            # Do not call superclass
 
     @gen.coroutine
     def poll(self):
@@ -87,7 +51,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
         just Falsy, to determine that the pod is still running.
         '''
         # have to wait for first load of data before we have a valid answer
-        with start_action(action_type="poll"):
+        with start_action(action_type="multispawner_poll"):
             if not self.pod_reflector.first_load_future.done():
                 yield self.pod_reflector.first_load_future
             data = self.pod_reflector.pods.get((self.namespace, self.pod_name),
@@ -178,18 +142,6 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
 
         pod = self.pod_reflector.pods[(self.namespace, self.pod_name)]
         self.pod_id = pod.metadata.uid
-        if self.event_reflector:
-            self.log.debug(
-                'pod %s events before launch: %s',
-                self.pod_name,
-                "\n".join(
-                    [
-                        "%s [%s] %s" % (event.last_timestamp,
-                                        event.type, event.message)
-                        for event in self.events
-                    ]
-                ),
-            )
         return (pod.status.pod_ip, self.port)
 
     @gen.coroutine
@@ -237,3 +189,42 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
                     "restarting pod reflector")
                 self._start_watching_pods(replace=True)
                 raise
+
+    def _start_watching_events(self, replace=True):
+        return self._start_reflector(
+            "events",
+            MultiEventReflector,
+            fields={"involvedObject.kind": "Pod"},
+            replace=replace,
+        )
+
+    def _start_watching_pods(self, replace=True):
+        return self._start_reflector("pods", MultiNamespacePodReflector,
+                                     replace=replace)
+
+    def _start_reflector(self, key, ReflectorClass, replace=True, **kwargs):
+        main_loop = IOLoop.current()
+
+        def on_reflector_failure():
+            self.log.critical(
+                "%s reflector failed, halting Hub.",
+                key.title(),
+            )
+            sys.exit(1)
+
+        previous_reflector = self.__class__.reflectors.get(key)
+
+        if replace or not previous_reflector:
+            self.__class__.reflectors[key] = ReflectorClass(
+                parent=self,
+                namespace=self.namespace,
+                on_failure=on_reflector_failure,
+                **kwargs,
+            )
+
+        if replace and previous_reflector:
+            # we replaced the reflector, stop the old one
+            previous_reflector.stop()
+
+        # return the current reflector
+        return self.__class__.reflectors[key]
