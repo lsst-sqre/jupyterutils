@@ -14,8 +14,8 @@ from kubernetes.client.rest import ApiException
 from kubernetes.config.config_exception import ConfigException
 from kubespawner import KubeSpawner
 from tornado import gen
-from tornado.ioloop import IOLoop
-from .multireflector import MultiNamespacePodReflector, MultiEventReflector
+from .multireflector import (MultiNamespacePodReflector,
+                             MultiNamespaceEventReflector)
 from ..utils import make_logger
 
 
@@ -81,8 +81,6 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
     def _start(self):
         '''Start the user's pod.
         '''
-        # Context issues with logging.  FIXME.
-        # with start_action(action_type="_start"):
         retry_times = 4  # Ad-hoc
         pod = yield self.get_pod_manifest()
         if self.modify_pod_hook:
@@ -193,7 +191,7 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
     def _start_watching_events(self, replace=True):
         return self._start_reflector(
             "events",
-            MultiEventReflector,
+            MultiNamespaceEventReflector,
             fields={"involvedObject.kind": "Pod"},
             replace=replace,
         )
@@ -203,7 +201,6 @@ class MultiNamespacedKubeSpawner(KubeSpawner):
                                      replace=replace)
 
     def _start_reflector(self, key, ReflectorClass, replace=True, **kwargs):
-        main_loop = IOLoop.current()
 
         def on_reflector_failure():
             self.log.critical(
