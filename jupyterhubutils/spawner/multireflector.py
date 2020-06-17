@@ -4,14 +4,14 @@ import threading
 import time
 from eliot import start_action
 from kubernetes import watch
-from .lsstreflector import LSSTResourceReflector
+from kubespawner.reflector import NamespacedResourceReflector
 from traitlets import Bool
 # This is kubernetes client implementation specific, but we need to know
 # whether it was a network or watch timeout.
 from urllib3.exceptions import ReadTimeoutError
 
 
-class MultiNamespaceResourceReflector(LSSTResourceReflector):
+class MultiNamespaceResourceReflector(NamespacedResourceReflector):
     list_method_omit_namespace = Bool(
         False,
         help="""
@@ -30,7 +30,8 @@ class MultiNamespaceResourceReflector(LSSTResourceReflector):
         If replace=True, a running pod reflector will be stopped
         and a new one started (for recovering from possible errors).
         """
-        return self._start_reflector("pods", LSSTPodReflector, replace=replace)
+        return self._start_reflector("pods", MultiNamespacePodReflector,
+                                     replace=replace)
 
     def _create_resource_key(self, resource):
         """Maps a Kubernetes resource object onto a hashable Dict key;
@@ -183,7 +184,7 @@ class MultiNamespaceResourceReflector(LSSTResourceReflector):
         self.watch_thread.start()
 
 
-class MultiEventReflector(MultiNamespaceResourceReflector):
+class MultiNamespaceEventReflector(MultiNamespaceResourceReflector):
     kind = 'events'
 
     list_method_name = 'list_namespaced_event'
@@ -196,7 +197,7 @@ class MultiEventReflector(MultiNamespaceResourceReflector):
         )
 
 
-class LSSTPodReflector(MultiNamespaceResourceReflector):
+class MultiNamespacePodReflector(MultiNamespaceResourceReflector):
     kind = 'pods'
     # FUTURE: These labels are the selection labels for the PodReflector. We
     # might want to support multiple deployments in the same namespace, so we
@@ -205,17 +206,12 @@ class LSSTPodReflector(MultiNamespaceResourceReflector):
     labels = {
         'component': 'singleuser-server',
     }
-
-    list_method_name = 'list_namespaced_pod'
+    list_method_name = 'list_pod_for_all_namespaces'
+    list_method_omit_namespace = True
 
     @property
     def pods(self):
         return self.resources
-
-
-class MultiNamespacePodReflector(LSSTPodReflector):
-    list_method_name = 'list_pod_for_all_namespaces'
-    list_method_omit_namespace = True
 
     def _create_resource_key(self, resource):
         return (resource.metadata.namespace, resource.metadata.name)
