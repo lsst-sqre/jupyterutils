@@ -133,7 +133,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         with start_action(action_type="_jwt_validate_user"):
             cfg = self.authenticator.lsst_mgr.config
             claims = auth_state['claims']
-            uid, groupmap = self.authenticator.resolve_cilogon(claims)
+            uid, groupmap = self.authenticator.resolve_groups(claims)
             groups = list(groupmap.keys())
             valid = check_membership(
                 groups, cfg.allowed_groups, cfg.forbidden_groups, log=self.log)

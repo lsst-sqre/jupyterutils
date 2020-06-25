@@ -11,10 +11,9 @@ from ..utils import make_logger
 class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
 
     def __init__(self, *args, **kwargs):
-        '''Add LSST Manager structure to hold LSST-specific logic.
-        '''
         self.log = make_logger()
         self.log.debug("Creating LSSTJWTAuthenticator")
+        # Superclass gives us the LSST Manager
         super().__init__(*args, **kwargs)
         self.auth_refresh_age = 900
         self.header_name = "X-Portal-Authorization"

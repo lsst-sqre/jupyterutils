@@ -16,24 +16,20 @@ from .loggable import Loggable, LoggableChild
 from .scanrepo import ScanRepo, SingletonScanner, Prepuller, Reaper
 from .lsstmgr import LSSTMiddleManager, check_membership
 from .spawner import LSSTSpawner
-from .authenticator.lsstcilogonauth import LSSTCILogonOAuthenticator
-from .authenticator.lsstgithubauth import LSSTGitHubOAuthenticator
 from .authenticator.lsstjwtauth import LSSTJWTAuthenticator
 from .utils import (rreplace, sanitize_dict, get_execution_namespace,
                     make_logger, str_bool, str_true, listify, intify,
                     floatify, list_duplicates, list_digest,
                     get_access_token, parse_access_token, assemble_gids)
 from .config import LSSTConfig
-from .setup_auth import configure_auth_and_spawner
 from ._version import __version__
 
 __all__ = [LSSTMiddleManager, check_membership, Prepuller, Reaper,
            ScanRepo, Singleton, SingletonScanner, LSSTSpawner,
-           LSSTCILogonOAuthenticator,
-           LSSTGitHubOAuthenticator, LSSTJWTAuthenticator, rreplace,
+           LSSTJWTAuthenticator, rreplace,
            sanitize_dict, get_execution_namespace, make_logger,
            str_bool, str_true, listify, intify, floatify,
            list_duplicates, list_digest, get_access_token,
            parse_access_token, assemble_gids, LSSTConfig,
-           configure_auth_and_spawner, Loggable, LoggableChild,
+           Loggable, LoggableChild,
            __version__]

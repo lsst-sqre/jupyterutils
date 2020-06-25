@@ -31,13 +31,12 @@ class LSSTAuthenticator(Authenticator):
         self.delete_invalid_users = True
         self.token = None
 
-    def resolve_cilogon(self, membership):
-        '''Shared between CILogon and JWT (which uses CILogon as its backing
-        store) and thus appearing here.  Returns a uid, groupmap pair
+    def resolve_groups(self, membership):
+        '''Returns a uid, groupmap pair
         suitable for insertion into auth_state; both uid and group
         values are strings.
         '''
-        with start_action(action_type="resolve_cilogon"):
+        with start_action(action_type="resolve_groups"):
             am = self.lsst_mgr.auth_mgr
             cfg = self.lsst_mgr.config
             groupmap = {}
