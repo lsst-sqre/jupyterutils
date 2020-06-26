@@ -151,33 +151,11 @@ class LSSTAuthManager(LoggableChild):
             if not ast:
                 raise RuntimeError(
                     "Could not determine current user auth state!")
-            cfg = self.parent.config
-            authtype = cfg.authenticator_type
-            if authtype == "github":
-                gh_user = ast["github_user"]
-                token = ast.get("access_token")
-                gh_email = gh_user.get("email")
-                gh_login = gh_user.get("login")
-                gh_name = gh_user.get("name") or gh_login
-                if gh_name:
-                    pod_env['GITHUB_NAME'] = gh_name
-                if gh_login:
-                    pod_env['GITHUB_LOGIN'] = gh_login
-                if gh_email:
-                    pod_env['GITHUB_EMAIL'] = gh_email
-                pod_env['GITHUB_ACCESS_TOKEN'] = token
-            elif authtype == "cilogon":
-                email = ast.cilogon_user.get("email")  # ?
-                if email:
-                    pod_env['GITHUB_EMAIL'] = email
-            elif authtype == "jwt":
-                claims = ast["claims"]
-                token = ast["access_token"]
-                email = claims.get("email")
-                pod_env['ACCESS_TOKEN'] = token
-                pod_env['GITHUB_EMAIL'] = email
-            else:
-                self.log.error("Auth type {} unknown!".format(authtype))
+            claims = ast["claims"]
+            token = ast["access_token"]
+            email = claims.get("email") or ''
+            pod_env['ACCESS_TOKEN'] = token
+            pod_env['GITHUB_EMAIL'] = email
             # These are generic
             self.uid = ast["uid"]
             if not self.uid:

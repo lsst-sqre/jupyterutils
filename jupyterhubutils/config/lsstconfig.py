@@ -5,7 +5,6 @@ import sys
 from eliot import to_file, start_action
 from eliot.stdlib import EliotHandler
 from jupyter_client.localinterfaces import public_ips
-from urllib.parse import urlparse
 from .. import Singleton
 from ..utils import (str_bool, listify, intify, floatify, make_logger,
                      get_execution_namespace, sanitize_dict)
@@ -84,30 +83,12 @@ class LSSTConfig(metaclass=Singleton):
         with start_action(action_type="load_from_environment"):
             self.debug = str_bool(os.getenv('DEBUG'))
             # Authentication parameters
-            self.authenticator_type = (os.getenv('AUTH_PROVIDER') or
-                                       os.getenv('OAUTH_PROVIDER') or
-                                       'github')
-            self.oauth_client_id = os.getenv('OAUTH_CLIENT_ID')
-            self.oauth_client_secret = os.getenv('OAUTH_CLIENT_SECRET')
-            self.oauth_callback_url = os.getenv('OAUTH_CALLBACK_URL')
-            # Authenticator-specific parameters
             self.jwt_logout_url = os.getenv("LOGOUT_URL") or '/logout'
-            self.jwt_signing_certificate = (
-                os.getenv('JWT_SIGNING_CERTIFICATE') or
-                '/opt/jwt/signing-certificate.pem')
-            self.cilogon_host = os.getenv('CILOGON_HOST') or 'cilogon.org'
-            self.cilogon_skin = os.getenv('CILOGON_SKIN') or 'LSST'
-            self.cilogon_idp = os.getenv('CILOGON_IDP_SELECTION')
-            self.cilogon_allowlist = listify(
-                os.getenv('CILOGON_GROUP_WHITELIST'))
-            self.cilogon_denylist = listify(
-                os.getenv('CILOGON_GROUP_DENYLIST'))
+            self.allowed_groups = listify(
+                os.getenv('ALLOWED_GROUPS'))
+            self.forbidden_groups = listify(
+                os.getenv('FORBIDDEN_GROUPS'))
             self.strict_ldap_groups = str_bool(os.getenv('STRICT_LDAP_GROUPS'))
-            self.github_host = os.getenv('GITHUB_HOST') or 'github.com'
-            self.github_allowlist = listify(
-                os.getenv('GITHUB_ORGANIZATION_WHITELIST'))
-            self.github_denylist = listify(
-                os.getenv('GITHUB_ORGANIZATION_DENYLIST'))
             # Settings for Options Form
             self.form_selector_title = (os.getenv('LAB_SELECTOR_TITLE') or
                                         'Container Image Selector')
@@ -222,22 +203,8 @@ class LSSTConfig(metaclass=Singleton):
         with start_action(action_type="create_derived_settings"):
             self.proxy_api_url = 'http://{}:{}'.format(
                 self.proxy_host, self.proxy_api_port)
-            if self.github_host == 'github.com':
-                self.github_api = 'api.github.com'
-            else:
-                self.github_api = "{}/api/v3".format(self.github_host)
-            audience = None
-            callback_url = self.oauth_callback_url
-            if callback_url:
-                netloc = urlparse(callback_url).netloc
-                scheme = urlparse(callback_url).scheme
-                if netloc and scheme:
-                    audience = scheme + "://" + netloc
-            if not audience:
-                audience = self.oauth_client_id or ''
-            self.audience = audience
             self.bind_url = 'http://0.0.0.0:8000{}'.format(self.hub_route)
-            self.hub_bind_url = 'http://0.0.0.0:8081'.format(self.hub_route)
+            self.hub_bind_url = 'http://0.0.0.0:8081{}'.format(self.hub_route)
             self.hub_connect_url = 'http://{}:{}{}'.format(self.hub_host,
                                                            self.hub_api_port,
                                                            self.hub_route)
@@ -247,11 +214,6 @@ class LSSTConfig(metaclass=Singleton):
                 self.lab_node_options = "--max-old-space-size={}".format(mm)
             while self.hub_route.endswith('/') and self.hub_route != '/':
                 self.hub_route = self.hub_route[:-1]
-            if not self.external_hub_url:
-                oauth_callback = self.oauth_callback_url
-                endstr = '/hub/oauth_callback'
-                if oauth_callback and oauth_callback.endswith(endstr):
-                    self.external_hub_url = oauth_callback[:-len(endstr)]
             if not self.external_instance_url:
                 ehu = self.external_hub_url
                 if ehu:
@@ -262,8 +224,7 @@ class LSSTConfig(metaclass=Singleton):
         '''Return dict for pretty printing.
         '''
         myvars = vars(self)
-        sanitized = sanitize_dict(myvars, ['oauth_client_secret',
-                                           'reaper_password',
+        sanitized = sanitize_dict(myvars, ['reaper_password',
                                            'session_db_url'])
         # Stringify classrefs
         for key in ["log", "authenticator_class", "spawner_class"]:
