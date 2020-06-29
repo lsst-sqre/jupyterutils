@@ -84,10 +84,6 @@ class LSSTConfig(metaclass=Singleton):
             self.debug = str_bool(os.getenv('DEBUG'))
             # Authentication parameters
             self.jwt_logout_url = os.getenv("LOGOUT_URL") or '/logout'
-            self.allowed_groups = listify(
-                os.getenv('ALLOWED_GROUPS'))
-            self.forbidden_groups = listify(
-                os.getenv('FORBIDDEN_GROUPS'))
             self.strict_ldap_groups = str_bool(os.getenv('STRICT_LDAP_GROUPS'))
             # Settings for Options Form
             self.form_selector_title = (os.getenv('LAB_SELECTOR_TITLE') or

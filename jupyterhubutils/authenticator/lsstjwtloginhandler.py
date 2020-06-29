@@ -4,7 +4,6 @@ from eliot import start_action
 from tornado import gen, web
 from jupyterhub.utils import url_path_join
 from jwtauthenticator.jwtauthenticator import JSONWebTokenLoginHandler
-from ..lsstmgr import check_membership
 from ..utils import parse_access_token
 
 
@@ -37,9 +36,9 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
     def _jwt_authenticate(self):
         # This is taken from https://github.com/mogthesprog/jwtauthenticator
         #  but with our additional claim information checked and stuffed
-        #  into auth_state, and allow/deny lists checked.
-        # Context problem here too.
-        # with start_action(action_type="_jwt_authenticate"):
+        #  into auth_state.
+        # Gafaelfawr will not give us back an invalid token; we will raise an
+        #  error if something goes wrong with the token analysis
         claims, token = yield self._check_auth_header()
         username_claim_field = self.authenticator.username_claim_field
         username = self.retrieve_username(claims, username_claim_field).lower()
@@ -49,10 +48,6 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
         #  choose our field names to make the spawner reusable from the
         #  OAuthenticator implementation.
         auth_state = yield self.refresh_user(user)
-        if not self._jwt_validate_user(auth_state):
-            # We're either in a forbidden group, or in no allowed groups
-            self.log.error("User did not validate from claims groups.")
-            raise web.HTTPError(403)
         _ = yield user.save_auth_state(auth_state)
         self.set_login_cookie(user)
 
@@ -123,23 +118,12 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
                 raise web.HTTPError(401)
             # Delegate to gafaelfawr for validation.
             self.log.debug("Sending token to gafaelfawr for validation.")
-            claims = parse_access_token(token=token)
+            try:
+                claims = parse_access_token(token=token)
+            except RuntimeError as exc:
+                self.log.error("Token validation failed: '{}'".format(exc))
+                raise web.HTTPError(403)
             uname = claims['uid']
             self.log.debug(
                 "Gafaelfawr validated token for '{}'.".format(uname))
             return claims, token
-
-    def _jwt_validate_user(self, auth_state):
-        with start_action(action_type="_jwt_validate_user"):
-            cfg = self.authenticator.lsst_mgr.config
-            claims = auth_state['claims']
-            uid, groupmap = self.authenticator.resolve_groups(claims)
-            groups = list(groupmap.keys())
-            valid = check_membership(
-                groups, cfg.allowed_groups, cfg.forbidden_groups, log=self.log)
-            if not valid:
-                self.log.warning("Group membership check failed.")
-                return False
-            auth_state['group_map'] = groupmap
-            auth_state['uid'] = uid
-            return True

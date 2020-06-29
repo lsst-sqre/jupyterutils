@@ -14,7 +14,7 @@ configuration convenience functions are in 'config_helpers'.
 from .singleton import Singleton
 from .loggable import Loggable, LoggableChild
 from .scanrepo import ScanRepo, SingletonScanner, Prepuller, Reaper
-from .lsstmgr import LSSTMiddleManager, check_membership
+from .lsstmgr import LSSTMiddleManager
 from .spawner import LSSTSpawner
 from .authenticator.lsstjwtauth import LSSTJWTAuthenticator
 from .utils import (rreplace, sanitize_dict, get_execution_namespace,
@@ -24,12 +24,10 @@ from .utils import (rreplace, sanitize_dict, get_execution_namespace,
 from .config import LSSTConfig
 from ._version import __version__
 
-__all__ = [LSSTMiddleManager, check_membership, Prepuller, Reaper,
-           ScanRepo, Singleton, SingletonScanner, LSSTSpawner,
-           LSSTJWTAuthenticator, rreplace,
-           sanitize_dict, get_execution_namespace, make_logger,
-           str_bool, str_true, listify, intify, floatify,
+__all__ = [LSSTMiddleManager, Prepuller, Reaper, ScanRepo, Singleton,
+           SingletonScanner, LSSTSpawner, LSSTJWTAuthenticator,
+           rreplace, sanitize_dict, get_execution_namespace,
+           make_logger, str_bool, str_true, listify, intify, floatify,
            list_duplicates, list_digest, get_access_token,
-           parse_access_token, assemble_gids, LSSTConfig,
-           Loggable, LoggableChild,
-           __version__]
+           parse_access_token, assemble_gids, LSSTConfig, Loggable,
+           LoggableChild, __version__]
