@@ -8,74 +8,7 @@ import random
 from asgiref.sync import async_to_sync
 from eliot import start_action
 from .. import LoggableChild
-from ..utils import list_duplicates, sanitize_dict
-
-
-def check_membership(groups, allowed, forbidden, log=None):
-    '''False if any of 'groups' are in 'forbidden'.  Otherwise true if
-    either: 'allowed' is empty or at least one member of 'groups' is
-    also in 'allowed'.  Pass a logger object in if you want it to emit
-    debug messages.
-    '''
-    with start_action(action_type="check_membership"):
-        if forbidden:
-            deny = list(set(forbidden) & set(groups))
-            if deny:
-                _maybe_log_debug(
-                    "User in forbidden group(s) '{}'".format(deny), log)
-                return False
-        if not allowed:
-            _maybe_log_debug(
-                "No list of allowed groups; allowing all groups.", log)
-            return True
-        intersection = list(set(allowed) & set(groups))
-        if intersection:
-            _maybe_log_debug(
-                "User in allowed group(s) '{}'".format(intersection), log)
-            return True
-        return False
-
-
-def _maybe_log_debug(message, log=None):
-    if not log:
-        return
-    log.debug(message)
-
-
-def group_merge(self, groups_1, groups_2):
-    '''Merge two groups, renaming collisions.
-    '''
-    with start_action(action_type="group_merge"):
-        # First just merge them
-        grps = []
-        grps.extend(groups_1)
-        grps.extend(groups_2)
-        # Naive deduplication
-        grps = list(set(grps))
-        grpnames = [x.split(':', 1)[0] for x in grps]
-        gnset = set(grpnames)
-        # Check for need to do less-naive dedupe
-        if len(gnset) != len(grpnames):
-            # We have a collision
-            grps = self._deduplicate_groups(grps, grpnames)
-        return grps
-
-
-def deduplicate_groups(grps):
-    '''Rename groups with colliding names.
-    '''
-    with start_action(action_type="deduplicate_groups"):
-        grpsplits = [x.split(':', 1) for x in grps]
-        grpnames = [x[0] for x in grpsplits]
-        grpnums = [x[1] for x in grpsplits]
-        flist = list_duplicates(grpnames)
-        for name, positions in flist:
-            i = 1
-            for p in positions[1:]:
-                # start with group_2 (leave the first one alone)
-                i += 1
-                grps[p] = grpnames[p] + "_" + str(i) + ":" + grpnums[p]
-        return grps
+from ..utils import sanitize_dict
 
 
 class LSSTAuthManager(LoggableChild):

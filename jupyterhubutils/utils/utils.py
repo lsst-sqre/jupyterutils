@@ -197,7 +197,7 @@ def parse_access_token(endpoint=None, tokenfile=None, token=None, timeout=15):
     rj = resp.json()
     p_resp = rj["token"]
     if not p_resp["valid"]:
-        raise RuntimeError("Access token is invalid!")
+        raise RuntimeError("Access token invalid: '{}'!".format(str(resp)))
     # Force to lowercase username (should no longer be necessary)
     p_tok = p_resp["data"]
     uname = p_tok["uid"]
