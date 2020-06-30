@@ -31,25 +31,6 @@ class LSSTAuthenticator(Authenticator):
         self.delete_invalid_users = True
         self.token = None
 
-    def resolve_groups(self, membership):
-        '''Returns a uid, groupmap pair
-        suitable for insertion into auth_state; both uid and group
-        values are strings.
-        '''
-        with start_action(action_type="resolve_groups"):
-            am = self.lsst_mgr.auth_mgr
-            cfg = self.lsst_mgr.config
-            groupmap = {}
-            for grp in membership['isMemberOf']:
-                name = grp['name']
-                gid = grp.get('id')
-                if not id and not cfg.strict_ldap_groups:
-                    gid = am.get_fake_gid()
-                if gid:
-                    groupmap[name] = str(gid)
-            uid = str(membership['uidNumber'])
-            return uid, groupmap
-
     def dump(self):
         '''Return dict suitable for pretty-printing.
         '''
@@ -73,10 +54,12 @@ class LSSTAuthenticator(Authenticator):
             uname = user.escaped_name
             self.log.debug(
                 "Entering lsstauth refresh_user for '{}'.".format(uname))
-            self.lsst_mgr.optionsform_mgr.options_form_data = None
             self.log.debug("Calling superclass's refresh_user().")
             retval = await super().refresh_user(user, handler)
             self.log.debug("Returned from superclass's refresh_user().")
+            self.log.debug("Clearing form data for '{}'.".format(uname))
+            self.lsst_mgr.optionsform_mgr.options_form_data = None
+            self.log.debug("Adding uid and groupmap to auth_state.")
             self.log.debug(
                 "Finished lsstauth refresh_user for '{}'".format(uname))
             return retval

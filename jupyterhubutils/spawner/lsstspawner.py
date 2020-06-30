@@ -116,9 +116,12 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         if not auth_state:
             raise ValueError(
                 "Auth state empty for user {}".format(self.user))
-        # Don't set the auth_state
-        # self.log.debug("Setting auth_mgr's auth_state from user.")
-        # lm.auth_mgr.auth_state = auth_state
+        uid = auth_state.get('uid')
+        if not uid:
+            self.log.warning(
+                "auth_state does not have 'uid'.  Attempting refresh."
+            )
+            _ = yield self.user.authenticator.refresh_user(self.user, None)
         self.log.debug("Parsing auth_state.")
         _ = yield self.asynchronize(lm.auth_mgr.parse_auth_state)
         # Will throw error if no UID
@@ -181,6 +184,9 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             if deleteme:
                 nsm = self.lsst_mgr.namespace_mgr
                 self.log.debug("Attempting to delete namespace.")
+                if not nsm.namespace:
+                    self.log.warning("Manager namespace fixup needed.")
+                    self.set_user_namespace()
                 self.asynchronize(nsm.maybe_delete_namespace)
             else:
                 self.log.debug("'delete_namespace_on_stop' not set.")

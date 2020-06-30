@@ -4,7 +4,6 @@ manipulation, designed for doing things with user group membership.
 '''
 
 import json
-import random
 from asgiref.sync import async_to_sync
 from eliot import start_action
 from .. import LoggableChild
@@ -26,24 +25,6 @@ class LSSTAuthManager(LoggableChild):
         self.group_map = {}
         self.pod_env = {}
         # Do not set self.auth_state.  It gets incorrectly cached.
-
-    def get_fake_gid(self):
-        '''Use if we have strict_ldap_groups off, to assign GIDs to names
-        with no matching Unix GID.  Since these will not appear as filesystem
-        groups, being consistent with them isn't important.  We just need
-        to make their GIDs something likely to not match anything real.
-
-        There is a chance of collision, but it doesn't really matter.
-
-        We do need to keep the no-GID groups around, though, because we might
-        be using them to make options form or quota decisions (if we know we
-        don't, we should turn on strict_ldap_groups).
-        '''
-        with start_action(action_type="get_fake_gid"):
-            grpbase = 3E7
-            grprange = 1E7
-            igrp = random.randint(grpbase, (grpbase + grprange))
-            return igrp
 
     def get_group_string(self):
         '''Convenience function for retrieving the group name-to-uid mapping
@@ -79,20 +60,17 @@ class LSSTAuthManager(LoggableChild):
         with start_action(action_type="parse_auth_state"):
             self.log.debug("Parsing authentication state.")
             pod_env = {}
-            ast = async_to_sync(
-                self.parent.spawner.user.get_auth_state)()
-            if not ast:
-                raise RuntimeError(
-                    "Could not determine current user auth state!")
+            # Force refresh if we have never set uid
+            user = self.parent.spawner.user
+            ast = async_to_sync(user.get_auth_state)()
+            self.uid = ast["uid"]
+            if not self.uid:
+                raise RuntimeError("Cannot determine user UID for pod spawn!")
             claims = ast["claims"]
             token = ast["access_token"]
             email = claims.get("email") or ''
             pod_env['ACCESS_TOKEN'] = token
             pod_env['GITHUB_EMAIL'] = email
-            # These are generic
-            self.uid = ast["uid"]
-            if not self.uid:
-                raise RuntimeError("Cannot determine user UID for pod spawn!")
             self.group_map = ast["group_map"]
             if not self.group_map:
                 raise RuntimeError("Cannot determine user GIDs for pod spawn!")

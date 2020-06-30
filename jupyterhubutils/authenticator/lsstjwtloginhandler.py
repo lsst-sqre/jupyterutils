@@ -64,7 +64,7 @@ class LSSTJWTLoginHandler(JSONWebTokenLoginHandler):
             try:
                 self.log.debug("Checking auth header for '{}'.".format(uname))
                 claims, token = yield self._check_auth_header()
-                self.log.debug("Checked auth header for '{}'.".format(uname))
+                self.log.debug("Auth header for '{}' is valid.".format(uname))
             except web.HTTPError:
                 # Force re-login
                 self.log.debug(
