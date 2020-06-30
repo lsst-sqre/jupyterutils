@@ -6,6 +6,7 @@ import hashlib
 import inspect
 import logging
 import os
+import random
 import requests
 
 from collections import defaultdict
@@ -214,3 +215,21 @@ def assemble_gids(groupinfo):
     gidlist = ["{}:{}".format(x['name'], x['id'])
                for x in groupinfo if 'id' in x]
     return ','.join(gidlist)
+
+
+def get_fake_gid():
+    '''Use if we have strict_ldap_groups off, to assign GIDs to names
+    with no matching Unix GID.  Since these will not appear as filesystem
+    groups, being consistent with them isn't important.  We just need
+    to make their GIDs something likely to not match anything real.
+
+    There is a chance of collision, but it doesn't really matter.
+
+    We do need to keep the no-GID groups around, though, because we might
+    be using them to make options form or quota decisions (if we know we
+    don't, we should turn on strict_ldap_groups).
+    '''
+    grpbase = 3E7
+    grprange = 1E7
+    igrp = random.randint(grpbase, (grpbase + grprange))
+    return igrp

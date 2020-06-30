@@ -5,7 +5,7 @@ from eliot import start_action
 from jwtauthenticator.jwtauthenticator import JSONWebTokenAuthenticator
 from .lsstauth import LSSTAuthenticator
 from .lsstjwtloginhandler import LSSTJWTLoginHandler
-from ..utils import make_logger
+from ..utils import make_logger, get_fake_gid
 
 
 class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
@@ -47,7 +47,7 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
                 "Entering lsstjwtauth refresh_user() for '{}'".format(uname))
             self.log.debug(
                 "Calling superclass refresh_user for '{}'.".format(uname))
-            retval = await super().refresh_user(user, handler)
+            _ = await super().refresh_user(user, handler)
             self.log.debug(
                 "Returned from  superclass refresh_user for '{}'.".format(
                     uname))
@@ -55,9 +55,31 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
                 self.log.debug("Handler has refresh_user too.")
                 self.log.debug(
                     "Calling handler's refresh_user() for '{}'.".format(uname))
-                retval = await handler.refresh_user(user, handler)
+                _ = await handler.refresh_user(user, handler)
                 self.log.debug(
                     "Returned from handler refresh_user for '{}'.".format(
                         uname))
-            self.log.debug("Finished with lsstjwtauth refresh_user.")
-            return retval
+            # Set uid and group_map
+            # Add 'uid' and 'group_map' to auth_state per lsstauth.py
+            ast = await user.get_auth_state()
+            claims = ast['claims']
+            ast['uid'] = claims['uidNumber']
+            ast['group_map'] = self.resolve_groups(claims)
+            await user.save_auth_state(ast)
+            return ast
+
+    def resolve_groups(self, membership):
+        '''Returns groupmap suitable for insertion into auth_state;
+        group values are strings.
+        '''
+        with start_action(action_type="resolve_groups"):
+            cfg = self.lsst_mgr.config
+            groupmap = {}
+            for grp in membership['isMemberOf']:
+                name = grp['name']
+                gid = grp.get('id')
+                if not id and not cfg.strict_ldap_groups:
+                    gid = get_fake_gid()
+                if gid:
+                    groupmap[name] = str(gid)
+            return groupmap
