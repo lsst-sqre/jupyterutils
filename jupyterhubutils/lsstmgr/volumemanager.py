@@ -123,6 +123,7 @@ class LSSTVolumeManager(LoggableChild):
                 vo = {"name": nm}
                 if hp:
                     vo["hostPath"] = {"path": hp.path}
+                    vl.append(vo)
                 elif nf:
                     am = "ReadWriteMany"
                     if nf.read_only:
@@ -131,6 +132,8 @@ class LSSTVolumeManager(LoggableChild):
                                  "path": nf.path,
                                  "accessMode": am}
                     vl.append(vo)
+                else:
+                    self.log.warning("Could not YAMLify volume {}".format(vol))
             vs = {"volumes": vl}
             ystr = yaml.dump(vs)
             return self._left_pad(ystr, left_pad)
@@ -157,7 +160,7 @@ class LSSTVolumeManager(LoggableChild):
         with start_action(action_type="_left_pad"):
             pad = ' ' * left_pad
             ylines = line_str.split("\n")
-            padlines = [pad + l for l in ylines]
+            padlines = [(pad + ln) for ln in ylines]
             return "\n".join(padlines)
 
     def get_dask_volume_b64(self):
