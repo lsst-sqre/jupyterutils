@@ -77,7 +77,7 @@ class LSSTVolumeManager(LoggableChild):
         with start_action(action_type="_define_k8s_hostpath_vol"):
             return client.V1Volume(
                 name=self._get_volume_name_for_mountpoint(vol["mountpoint"]),
-                host_path=client.V1HostPath(
+                host_path=client.V1HostPathVolumeSource(
                     path=vol["mountpoint"]
                 )
             )
