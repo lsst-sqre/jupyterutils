@@ -68,7 +68,7 @@ class LSSTVolumeManager(LoggableChild):
                     k8svol = self._define_k8s_hostpath_vol(vol)
                 else:
                     k8svol = self._define_k8s_nfs_vol(vol)
-                    k8smt = self._define_k8s_mtpt(vol)
+                k8smt = self._define_k8s_mtpt(vol)
                 if k8svol and k8smt:
                     self.k8s_volumes.append(k8svol)
                     self.k8s_vol_mts.append(k8smt)
@@ -77,7 +77,7 @@ class LSSTVolumeManager(LoggableChild):
         with start_action(action_type="_define_k8s_hostpath_vol"):
             return client.V1Volume(
                 name=self._get_volume_name_for_mountpoint(vol["mountpoint"]),
-                host_path=client.V1HostPath(
+                host_path=client.V1HostPathVolumeSource(
                     path=vol["mountpoint"]
                 )
             )
