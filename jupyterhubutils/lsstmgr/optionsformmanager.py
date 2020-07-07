@@ -177,6 +177,9 @@ class LSSTOptionsFormManager(LoggableChild):
                 if ('clear_dotlocal' in formdata and
                         formdata['clear_dotlocal']):
                     options['clear_dotlocal'] = True
+                if ('enable_debug' in formdata and
+                        formdata['enable_debug']):
+                    options['enable_debug'] = True
             return options
 
     def dump(self):

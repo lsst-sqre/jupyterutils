@@ -23,7 +23,6 @@ class LSSTEnvironmentManager(LoggableChild):
         with start_action(action_type="create_pod_env"):
             cfg = self.parent.config
             env = {}
-            env['DEBUG'] = str_true(cfg.debug)
             cpug = float(cfg.tiny_cpu_max) / float(cfg.lab_size_range)
             env['CPU_GUARANTEE'] = str(cpug)
             env['MEM_GUARANTEE'] = "{}M".format(int(
@@ -52,6 +51,8 @@ class LSSTEnvironmentManager(LoggableChild):
             env['EXTERNAL_SODA_URL'] = cfg.external_soda_url
             env['EXTERNAL_WORKFLOW_URL'] = cfg.external_workflow_url
             env['AUTO_REPO_URLS'] = cfg.auto_repo_urls
+            env['INSTANCE_NAME'] = cfg.instance_name
+            env['FQDN'] = cfg.fqdn
             # Now clean up the env hash by removing any keys with empty values
             cleaned = self._clean_env(env)
             sanitized = self._sanitize(cleaned)

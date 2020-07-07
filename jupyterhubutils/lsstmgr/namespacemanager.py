@@ -3,10 +3,13 @@
 
 import json
 import time
+import yaml
 from eliot import start_action
 from kubernetes.client.rest import ApiException
 from kubernetes import client
 from .. import LoggableChild
+from ..utils import (make_passwd_line, make_group_lines, add_user_to_groups,
+                     assemble_gids)
 
 
 class LSSTNamespaceManager(LoggableChild):
@@ -60,6 +63,8 @@ class LSSTNamespaceManager(LoggableChild):
             # Wait for the namespace to actually appear before creating objects
             #  in it.
             self.wait_for_namespace()
+            self.log.debug("Ensuring namespaced config maps.")
+            self.ensure_namespaced_config_maps()
             if cfg.allow_dask_spawn:
                 self.log.debug("Ensuring namespaced service account.")
                 self.ensure_namespaced_service_account()
@@ -155,15 +160,16 @@ class LSSTNamespaceManager(LoggableChild):
                     body=svcacct)
             except ApiException as e:
                 if e.status != 409:
-                    self.log.exception("Create service account '{}' " +
-                                       "in namespace '{}' " +
-                                       "failed: '{}".format(account,
-                                                            namespace, e))
+                    self.log.exception(("Create service account '{}' " +
+                                        "in namespace '{}' " +
+                                        "failed: '{}").format(account,
+                                                              namespace, e))
                     raise
                 else:
-                    self.log.info("Service account '{}' " +
-                                  "in namespace '{}' " +
-                                  "already exists.".format(account, namespace))
+                    self.log.info(("Service account '{}' " +
+                                   "in namespace '{}' " +
+                                   "already exists.").format(account,
+                                                             namespace))
             try:
                 self.log.info("Attempting to create role in namespace.")
                 rbac_api.create_namespaced_role(
@@ -171,13 +177,15 @@ class LSSTNamespaceManager(LoggableChild):
                     role)
             except ApiException as e:
                 if e.status != 409:
-                    self.log.exception("Create role '%s' " % account +
-                                       "in namespace '%s' " % namespace +
-                                       "failed: %s" % str(e))
+                    self.log.exception(("Create role '{}' " +
+                                        "in namespace '{}' " +
+                                        "failed: {}").format(account,
+                                                             namespace, e))
                     raise
                 else:
-                    self.log.info("Role '{}' already exists in " +
-                                  "namespace '{}'.".format(account, namespace))
+                    self.log.info(("Role '{}' already exists in " +
+                                   "namespace '{}'.").format(account,
+                                                             namespace))
             try:
                 self.log.info("Attempting to create rolebinding in namespace.")
                 rbac_api.create_namespaced_role_binding(
@@ -185,13 +193,251 @@ class LSSTNamespaceManager(LoggableChild):
                     rolebinding)
             except ApiException as e:
                 if e.status != 409:
-                    self.log.exception("Create rolebinding '%s'" % account +
-                                       "in namespace '%s' " % namespace +
-                                       "failed: %s", str(e))
+                    self.log.exception(("Create rolebinding '{}' " +
+                                        "in namespace '{}' " +
+                                        "failed: {}").format(account,
+                                                             namespace, e))
                     raise
                 else:
                     self.log.info("Rolebinding '%s' " % account +
                                   "already exists in '%s'." % namespace)
+
+    def def_lab_config_maps(self):
+        '''Create ConfigMaps for data we will need in the
+        spawned environment.  Returns a dict with string keys which are
+        the basenames of the ConfigMap-represented files, and values
+        which are the in-memory K8s ConfigMap objects.
+        '''
+        with start_action(action_type="def_lab_config_maps"):
+            cfg = self.parent.config
+            auth = self.parent.authenticator
+            ast = auth.cached_auth_state
+            if not ast:
+                errstr = "Authenticator has no cached_auth_state!"
+                self.log.error(errstr)
+                raise RuntimeError(errstr)
+            uname = ast['claims']['uid']
+            token = ast['access_token']
+            claims = ast['claims']
+            vol_file = cfg.volume_definition_file
+            with open(vol_file, "r") as fp:
+                vdata = fp.read()
+            v_nm = 'mountpoints'
+            vol_configmap = client.V1ConfigMap(
+                metadata=client.V1ObjectMeta(name=v_nm),
+                data={v_nm: vdata})
+            self.log.debug("Created volume configmap '{}'".format(v_nm))
+            pw_file = cfg.base_passwd_file
+            with open(pw_file, "r") as fp:
+                b_pdata = fp.read().rstrip() + '\n'
+            p_nm = 'passwd'
+            pline = make_passwd_line(claims)
+            pdata = b_pdata + pline
+            pw_configmap = client.V1ConfigMap(
+                metadata=client.V1ObjectMeta(name=p_nm),
+                data={p_nm: pdata})
+            grp_file = cfg.base_group_file
+            with open(grp_file, "r") as fp:
+                b_gdata = fp.read().rstrip() + '\n'
+            gdata = add_user_to_groups(uname, b_gdata)
+            g_nm = 'group'
+            glines = make_group_lines(
+                claims, strict_ldap=cfg.strict_ldap_groups)
+            for gl in glines:
+                gdata = gdata + gl
+            grp_configmap = client.V1ConfigMap(
+                metadata=client.V1ObjectMeta(name=g_nm),
+                data={g_nm: gdata})
+            a_nm = 'access-token'
+            # Use fqdn to uniquely identify instance.
+            mt_nm = cfg.fqdn + "-token"
+            at_configmap = client.V1ConfigMap(
+                metadata=client.V1ObjectMeta(name=a_nm),
+                data={mt_nm: token})
+            s_nm = 'shadow'
+            s_pw_configmap = client.V1ConfigMap(
+                metadata=client.V1ObjectMeta(name=s_nm),
+                data={s_nm: self._pwconv(pdata)})
+            sg_nm = 'gshadow'
+            s_grp_configmap = client.V1ConfigMap(
+                metadata=client.V1ObjectMeta(name=sg_nm),
+                data={sg_nm: self._grpconv(gdata)})
+            cm_map = {
+                v_nm: vol_configmap,
+                p_nm: pw_configmap,
+                s_nm: s_pw_configmap,
+                g_nm: grp_configmap,
+                sg_nm: s_grp_configmap,
+                a_nm: at_configmap
+            }
+            return cm_map
+
+    def ensure_dask_configmap(self, daskconfig):
+        '''This one can't be called until spawn time, once we know the
+        parameters (image, size, etc.).  Daskconfig is a dict with string
+        keys.
+        '''
+        with start_action(action_type='ensure_dask_configmap'):
+            namespace = self.namespace
+            api = self.parent.api
+            cfg = self.parent.config
+            if not cfg.allow_dask_spawn:
+                self.log.warning(
+                    "Dask spawns disallowed.  Not making configmap.")
+                return
+            dask_config = self._def_dask_configmap(daskconfig)
+            try:
+                self.log.info(
+                    (("Attempting to create configmap 'dask-config' " +
+                      "in {}").format(namespace)))
+                api.create_namespaced_config_map(namespace, dask_config)
+            except ApiException as e:
+                if e.status != 409:
+                    estr = "Create configmap failed: {}".format(e)
+                    self.log.exception(estr)
+                    raise
+                else:
+                    self.log.info("Configmap already exists.")
+
+    def _def_dask_configmap(self, daskconfig):
+        with start_action(action_type='_def_dask_configmap'):
+            d_yaml = self._def_dask_yaml(daskconfig)
+            # Same per-instance strategy as access_token
+            fqdn = self.parent.config.fqdn
+            fn = fqdn + "-dask_worker.example.yml"
+            cmap = client.V1ConfigMap(
+                metadata=client.V1ObjectMeta(name='dask-config'),
+                data={fn: d_yaml})
+            return cmap
+
+    def _def_dask_yaml(self, daskconfig):
+        with start_action(action_type='_def_dask_yaml'):
+            cfg = self.parent.config
+            vm = self.parent.volume_mgr
+            ast = daskconfig['auth_state']
+            claims = ast['claims']
+            uname = claims['uid']
+            uid = int(ast['uid'])
+            uid_str = str(ast['uid'])
+            debug = ''
+            instance_name = ''
+            if daskconfig.get('instance_name'):
+                instance_name = daskconfig['instance_name']
+            if daskconfig['debug']:
+                debug = 'true'
+            e_grps = assemble_gids(
+                claims, strict_ldap=cfg.strict_ldap_groups)
+            resources = daskconfig['resources']
+            image = daskconfig['image']
+            cmd = '/opt/lsst/software/jupyterlab/provisionator.bash'
+            mounts = vm.get_volume_mount_list()
+            vols = vm.get_volume_list()
+            run_as = 769
+            if cfg.lab_no_sudo:
+                run_as = uid
+            dask_ctr = {'image': image,
+                        'imagePullPolicy': 'Always',
+                        'args': [cmd],
+                        'name': 'dask',
+                        'env': [
+                            {'name': 'DASK_WORKER',
+                             'value': 'true'},
+                            {'name': 'DEBUG',
+                             'value': debug},
+                            {'name': 'EXTERNAL_GROUPS',
+                             'value': e_grps},
+                            {'name': 'EXTERNAL_UID',
+                             'value': uid_str},
+                            {'name': 'JUPYTERHUB_USER',
+                             'value': uname},
+                            {'name': 'INSTANCE_NAME',
+                             'value': instance_name},
+                            {'name': 'CPU_LIMIT',
+                             'value': resources['limits']['cpu']},
+                            {'name': 'MEM_LIMIT',
+                             'value': resources['limits']['memory']},
+                            {'name': 'CPU_GUARANTEE',
+                             'value': resources['requests']['cpu']},
+                            {'name': 'MEM_GUARANTEE',
+                             'value': resources['requests']['memory']}
+                        ],  # env
+                        'resources': resources,
+                        'volumeMounts': mounts}
+            if cfg.restrict_dask_nodes:
+                dask_ctr['nodeSelector'] = {'dask': 'ok'}
+            self.log.error("Dask container: {}".format(dask_ctr))
+            self.log.error("Volumes: {}".format(vols))
+            dask_spec = {
+                'restartPolicy': 'Never',
+                'securityContext': {
+                    'runAsUser': run_as,
+                    'runAsGroup': run_as
+                }
+            }
+            self.log.error("Dask_spec_pre: {}".format(dask_spec))
+            dask_spec['containers'] = [dask_ctr]
+            self.log.error("Dask_spec_pre2: {}".format(dask_spec))
+            dask_spec['volumes'] = vols
+            self.log.error("Dask_spec_post: {}".format(dask_spec))
+            dask_dict = {'kind': 'Pod',
+                         'metadata': {
+                             'labels': {
+                                 'dask': 'ok'
+                             }
+                         },
+                         'spec': dask_spec}
+            self.log.error('Dask pod object: {}'.format(dask_dict))
+            c_yaml = yaml.dump(dask_dict)
+            self.log.error('Dask YAML: {}'.format(c_yaml))
+            return c_yaml
+
+    def _pwconv(self, pwdata):
+        pwlines = pwdata.split('\n')
+        spwlines = []
+        for pl in pwlines:
+            pll = pl.strip()
+            if not pll:
+                continue
+            unm = pll.split(':')[0]
+            # 18000 is late March 2019; doesn't really matter
+            spl = "{}:*:18000:0:99999:7:::\n".format(unm)
+            spwlines.append(spl)
+        spwdata = ''.join(spwlines)  # They already have newlines
+        return spwdata
+
+    def _grpconv(self, grpdata):
+        grplines = grpdata.split('\n')
+        sglines = []
+        for grp in grplines:
+            grpl = grp.strip()
+            if not grpl:
+                continue
+            flds = grpl.split(':')
+            gnm = flds[0]
+            gmem = flds[-1]
+            sgl = "{}:!::{}\n".format(gnm, gmem)
+            sglines.append(sgl)
+        sgdata = ''.join(sglines)  # They already have newlines
+        return sgdata
+
+    def ensure_namespaced_config_maps(self):
+        with start_action(action_type="ensure_namespaced_config_maps"):
+            namespace = self.namespace
+            api = self.parent.api
+            cm_map = self.def_lab_config_maps()
+            for cm in cm_map:
+                try:
+                    self.log.info(
+                        (("Attempting to create configmap {} " +
+                          "in {}").format(cm, namespace)))
+                    api.create_namespaced_config_map(namespace, cm_map[cm])
+                except ApiException as e:
+                    if e.status != 409:
+                        estr = "Create configmap failed: {}".format(e)
+                        self.log.exception(estr)
+                        raise
+                    else:
+                        self.log.info("Configmap already exists.")
 
     def wait_for_namespace(self, timeout=30):
         '''Wait for namespace to be created.'''

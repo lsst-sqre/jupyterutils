@@ -2,7 +2,6 @@ import json
 from eliot import start_action
 from .. import Loggable
 from .apimanager import LSSTAPIManager
-from .authmanager import LSSTAuthManager
 from .envmanager import LSSTEnvironmentManager
 from .namespacemanager import LSSTNamespaceManager
 from .optionsformmanager import LSSTOptionsFormManager
@@ -29,7 +28,6 @@ class LSSTMiddleManager(Loggable):
         self.spawner = kwargs.pop('spawner', None)
         self.user = kwargs.pop('user', None)
         self.api_mgr = LSSTAPIManager(parent=self)
-        self.auth_mgr = LSSTAuthManager(parent=self)
         self.env_mgr = LSSTEnvironmentManager(parent=self)
         self.namespace_mgr = LSSTNamespaceManager(parent=self)
         self.optionsform_mgr = LSSTOptionsFormManager(parent=self)
@@ -53,14 +51,13 @@ class LSSTMiddleManager(Loggable):
               "rbac_api": str(self.rbac_api),
               "config": self.config.dump(),
               "api_mgr": self.api_mgr.dump(),
-              "auth_mgr": self.auth_mgr.dump(),
               "env_mgr": self.env_mgr.dump(),
               "optionsform_mgr": self.optionsform_mgr.dump(),
               "quota_mgr": self.quota_mgr.dump(),
               "volume_mgr": self.volume_mgr.dump()
               }
         if self.user:
-            md["user"] = "".format(self.user)
+            md["user"] = "{}".format(self.user)
         if self.spawner:
             md["spawner"] = self.spawner.dump()
         return md

@@ -5,7 +5,7 @@ from eliot import start_action
 from jwtauthenticator.jwtauthenticator import JSONWebTokenAuthenticator
 from .lsstauth import LSSTAuthenticator
 from .lsstjwtloginhandler import LSSTJWTLoginHandler
-from ..utils import make_logger, get_fake_gid
+from ..utils import make_logger, resolve_groups
 
 
 class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
@@ -19,6 +19,7 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
         self.header_name = "X-Portal-Authorization"
         self.header_is_authorization = True
         self.username_claim_field = 'uid'
+        self.cached_auth_state = {}
 
     def get_handlers(self, app):
         '''Install custom handlers.
@@ -61,25 +62,11 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
                         uname))
             # Set uid and group_map
             # Add 'uid' and 'group_map' to auth_state per lsstauth.py
+            strict_ldap = self.lsst_mgr.config.strict_ldap_groups
             ast = await user.get_auth_state()
             claims = ast['claims']
             ast['uid'] = claims['uidNumber']
-            ast['group_map'] = self.resolve_groups(claims)
+            ast['group_map'] = resolve_groups(claims, strict_ldap)
             await user.save_auth_state(ast)
+            self.cached_auth_state = ast  # For ease of synchronous access
             return ast
-
-    def resolve_groups(self, membership):
-        '''Returns groupmap suitable for insertion into auth_state;
-        group values are strings.
-        '''
-        with start_action(action_type="resolve_groups"):
-            cfg = self.lsst_mgr.config
-            groupmap = {}
-            for grp in membership['isMemberOf']:
-                name = grp['name']
-                gid = grp.get('id')
-                if not id and not cfg.strict_ldap_groups:
-                    gid = get_fake_gid()
-                if gid:
-                    groupmap[name] = str(gid)
-            return groupmap
