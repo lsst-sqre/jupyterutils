@@ -1,10 +1,12 @@
 import base64
 import json
-import os
 import yaml
 from eliot import start_action
 from kubernetes import client
 from .. import LoggableChild
+
+PWFILES = ["passwd", "group", "shadow", "gshadow"]
+CONFIGMAPS = PWFILES + ["mountpoints", "access-token", "dask-config"]
 
 
 class LSSTVolumeManager(LoggableChild):
@@ -25,10 +27,13 @@ class LSSTVolumeManager(LoggableChild):
             vollist = []
             config = []
             config_file = self.parent.config.volume_definition_file
-            if not os.path.exists(config_file):
-                return vollist
-            with open(config_file, "r") as fp:
-                config = json.load(fp)
+            if config_file:
+                try:
+                    with open(config_file, "r") as fp:
+                        config = json.load(fp)
+                except Exception as e:
+                    self.log.error(("Could not read config file '{}': " +
+                                    "{}").format(config_file, e))
             for mtpt in config:
                 mountpoint = mtpt["mountpoint"]  # Fatal error if it
                 # doesn't exist
@@ -59,8 +64,8 @@ class LSSTVolumeManager(LoggableChild):
 
     def _define_k8s_object_representations(self):
         with start_action(action_type="_define_k8s_object_representations"):
-            self.k8s_volumes = []
-            self.k8s_vol_mts = []
+            self.k8s_volumes = self._make_config_map_volumes()
+            self.k8s_vol_mts = self._make_config_map_mtpts()
             for vol in self.volume_list:
                 k8svol = None
                 k8smt = None
@@ -72,6 +77,70 @@ class LSSTVolumeManager(LoggableChild):
                 if k8svol and k8smt:
                     self.k8s_volumes.append(k8svol)
                     self.k8s_vol_mts.append(k8smt)
+
+    def _make_config_map_volumes(self):
+        cmvls = []
+        for cname in CONFIGMAPS:
+            if cname in PWFILES:
+                # If no_sudo is *not* set, provisionator will construct
+                #  the user and group entries at startup.
+                if not self.parent.config.lab_no_sudo:
+                    continue
+            vol = client.V1Volume(
+                name=cname,
+                config_map=client.V1ConfigMapVolumeSource(
+                    name=cname))
+            if cname.endswith('shadow'):
+                vol.default_mode = 0o600
+            else:
+                vol.default_mode = 0o444
+            cmvls.append(vol)
+        return cmvls
+
+    def _make_config_map_mtpts(self):
+        cmts = []
+        for cname in CONFIGMAPS:
+            if cname in PWFILES:
+                # If no_sudo is *not* set, provisionator will construct
+                #  the user and group entries at startup.
+                if not self.parent.config.lab_no_sudo:
+                    continue
+                # password/group files go in /etc
+                fpath = "/etc/{}".format(cname)
+                cmts.append(client.V1VolumeMount(
+                    name=cname,
+                    read_only=True,
+                    mount_path=fpath,
+                    sub_path=cname))
+            elif cname == 'access-token':
+                # We will symlink .../tokens/{instance}-token to
+                #  ~/.access_token at runtime.  We don't want to use
+                #  a subpath because we DO want .access_token to be
+                #  updateable in a running container if we get some sort
+                #  of token refresh mechanism in the future.
+                mtpath = '/opt/lsst/software/jupyterhub/tokens'
+                cmts.append(client.V1VolumeMount(
+                    name=cname,
+                    mount_path=mtpath,
+                    read_only=True))
+            elif cname == 'dask-config':
+                # Same strategy as access_token
+                cfg = self.parent.config
+                if not cfg.allow_dask_spawn:
+                    continue
+                mtpath = '/opt/lsst/software/jupyterhub/dask_yaml'
+                cmts.append(client.V1VolumeMount(
+                    name=cname,
+                    mount_path=mtpath,
+                    read_only=True))
+            elif cname == 'mountpoints':
+                cmts.append(client.V1VolumeMount(
+                    name=cname,
+                    read_only=True,
+                    mount_path='/opt/lsst/software/jupyterhub/mounts'))
+            else:
+                self.log.warning("Unrecognized ConfigMap '{}'!".format(cname))
+        return cmts
 
     def _define_k8s_hostpath_vol(self, vol):
         with start_action(action_type="_define_k8s_hostpath_vol"):
@@ -109,8 +178,10 @@ class LSSTVolumeManager(LoggableChild):
         with start_action(action_type="_get_volume_name_for_mountpoint"):
             return mountpoint[1:].replace('/', '-')
 
-    def _get_volume_yaml_str(self, left_pad=0):
-        with start_action(action_type="_get_volume_yaml_str"):
+    def get_volume_list(self):
+        '''Get a list object suitable for yaml-encoding.
+        '''
+        with start_action(action_type="get_volume_list"):
             vols = self.k8s_volumes
             if not vols:
                 self.log.warning("No volumes defined.")
@@ -120,6 +191,7 @@ class LSSTVolumeManager(LoggableChild):
                 nm = vol.name
                 hp = vol.host_path
                 nf = vol.nfs
+                cm = vol.config_map
                 vo = {"name": nm}
                 if hp:
                     vo["hostPath"] = {"path": hp.path}
@@ -132,14 +204,27 @@ class LSSTVolumeManager(LoggableChild):
                                  "path": nf.path,
                                  "accessMode": am}
                     vl.append(vo)
+                elif cm:
+                    mode = 0o444
+                    name = cm.name
+                    if name.endswith('shadow'):
+                        mode = 0o000
+                    vo["configMap"] = {"name": name,
+                                       "defaultMode": mode}
+                    vl.append(vo)
                 else:
                     self.log.warning("Could not YAMLify volume {}".format(vol))
+            return vl
+
+    def _get_volume_yaml_str(self, left_pad=0):
+        with start_action(action_type="_get_volume_yaml_str"):
+            vl = self.get_volume_list()
             vs = {"volumes": vl}
             ystr = yaml.dump(vs)
             return self._left_pad(ystr, left_pad)
 
-    def _get_volume_mount_yaml_str(self, left_pad=0):
-        with start_action(action_type="_get_volume_mount_yaml_str"):
+    def get_volume_mount_list(self):
+        with start_action(action_type="get_volume_mount_list"):
             vms = self.k8s_vol_mts
             if not vms:
                 self.log.warning("No volume mounts defined.")
@@ -152,6 +237,11 @@ class LSSTVolumeManager(LoggableChild):
                 if vm.read_only:
                     vo["readOnly"] = True
                 vl.append(vo)
+            return vl
+
+    def _get_volume_mount_yaml_str(self, left_pad=0):
+        with start_action(action_type="_get_volume_mount_yaml_str"):
+            vl = self.get_volume_mount_list()
             vs = {"volumeMounts": vl}
             ystr = yaml.dump(vs)
             return self._left_pad(ystr, left_pad)

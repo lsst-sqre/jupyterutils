@@ -64,7 +64,8 @@ setuptools.setup(
         'eliot',
         'eliot-tree',
         'argo-workflows>=3.0.0,<3.2.0',
-        'asgiref>=3.0.0,<4.0.0'
+        'asgiref>=3.0.0,<4.0.0',
+        'pyyaml'
     ],
     entry_points={
         'console_scripts': [

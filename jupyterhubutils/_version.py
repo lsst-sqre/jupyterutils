@@ -1,5 +1,5 @@
 '''
 Version information.
 '''
-version_info = (0, 23, 5)
+version_info = (0, 24, 0)
 __version__ = '.'.join(map(str, version_info))
