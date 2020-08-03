@@ -156,20 +156,6 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                 raise ValueError("Won't spawn into default namespace!")
             return "{}-{}".format(defname, self.user.escaped_name)
 
-    def start(self):
-        with start_action(action_type="start"):
-            # All we need to do is ensure the namespace and K8s ancillary
-            #  resources before we run the superclass method to spawn a pod,
-            #  so we have the namespace to spawn into, and the service account
-            #  with appropriate roles and rolebindings.
-            self.log.debug("Starting; creating namespace/ancillary objects.")
-            self.log.debug(
-                "User name in start() is '{}'.".format(self._log_name))
-            self.set_user_namespace()  # Set namespace here/in namespace_mgr
-            self.lsst_mgr.ensure_resources()
-            retval = super().start()
-            return retval
-
     @gen.coroutine
     def stop(self, now=False):
         '''After stopping pod, delete the namespace if that option is set.
@@ -391,6 +377,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             strict_ldap = self.lsst_mgr.config.strict_ldap_groups
             self.supplemental_gids = get_supplemental_gids(claims,
                                                            strict_ldap)
+        self.set_user_namespace()
+        daskconfig = None
         if cfg.allow_dask_spawn:
             ast = yield self.user.get_auth_state()
             daskconfig = {
@@ -409,11 +397,13 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                 },
                 "auth_state": ast
             }
-            nm.ensure_dask_configmap(daskconfig)
         self.log.debug("Pod environment: {}".format(json.dumps(
             sanitized_env,
             sort_keys=True,
             indent=4)))
+        # This is the part that actually makes the K8s resources.
+        nm.ensure_namespace(namespace=self.namespace,
+                            daskconfig=daskconfig)
         self.log.debug("About to run make_pod()")
         pod = make_pod(
             name=self.pod_name,

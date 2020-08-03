@@ -36,12 +36,6 @@ class LSSTMiddleManager(Loggable):
         self.api = self.api_mgr.api
         self.rbac_api = self.api_mgr.rbac_api
 
-    def ensure_resources(self):
-        '''Delegate to namespace manager.
-        '''
-        with start_action(action_type="ensure_resources"):
-            self.namespace_mgr.ensure_namespace()
-
     def dump(self):
         '''Return contents dict to pretty-print.
         '''

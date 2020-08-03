@@ -25,7 +25,7 @@ class LSSTNamespaceManager(LoggableChild):
         with start_action(action_type="set_namespace"):
             self.namespace = namespace
 
-    def ensure_namespace(self):
+    def ensure_namespace(self, namespace=None, daskconfig=None):
         '''Here we make sure that the namespace exists, creating it if
         it does not.  That requires a ClusterRole that can list and create
         namespaces.
@@ -35,7 +35,10 @@ class LSSTNamespaceManager(LoggableChild):
 
         '''
         with start_action(action_type="ensure_namespace"):
-            namespace = self.namespace
+            if not namespace:
+                namespace = self.namespace
+            else:
+                self.set_namespace(namespace)
             if not namespace or namespace == "default":
                 raise ValueError("Will not use default namespace!")
             api = self.parent.api
@@ -68,6 +71,8 @@ class LSSTNamespaceManager(LoggableChild):
             if cfg.allow_dask_spawn:
                 self.log.debug("Ensuring namespaced service account.")
                 self.ensure_namespaced_service_account()
+                if daskconfig:
+                    self.ensure_dask_configmap(daskconfig)
             if self.parent.spawner.enable_namespace_quotas:
                 # By the time we need this, quota will have been set, because
                 #  we needed it for options form generation.
@@ -211,6 +216,10 @@ class LSSTNamespaceManager(LoggableChild):
         with start_action(action_type="def_lab_config_maps"):
             cfg = self.parent.config
             auth = self.parent.authenticator
+            # This is a terrible way to get around the fact that
+            # accessing auth_state is an async function and we get into a
+            # horrific inception situation if we try to add async to the
+            # current manager framework.
             ast = auth.cached_auth_state
             if not ast:
                 errstr = "Authenticator has no cached_auth_state!"
@@ -273,9 +282,8 @@ class LSSTNamespaceManager(LoggableChild):
             return cm_map
 
     def ensure_dask_configmap(self, daskconfig):
-        '''This one can't be called until spawn time, once we know the
-        parameters (image, size, etc.).  Daskconfig is a dict with string
-        keys.
+        '''This one can't be called until we know the parameters (image, size,
+        etc.) (typically spawn time).  Daskconfig is a dict with string keys.
         '''
         with start_action(action_type='ensure_dask_configmap'):
             namespace = self.namespace
