@@ -164,9 +164,6 @@ class LSSTOptionsFormManager(LoggableChild):
         with start_action(action_type="options_from_form"):
             options = None
             if formdata:
-                self.log.debug("Form data: %s", json.dumps(formdata,
-                                                           sort_keys=True,
-                                                           indent=4))
                 options = {}
                 if ('kernel_image' in formdata and formdata['kernel_image']):
                     options['kernel_image'] = formdata['kernel_image'][0]

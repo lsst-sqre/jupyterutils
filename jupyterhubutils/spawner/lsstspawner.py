@@ -61,6 +61,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                                           user=user,
                                           config=LSSTConfig())
         self.log.debug("Initialized {}".format(__name__))
+        self.cached_auth_state = {}
         self.delete_grace_period = 5
         # In our LSST setup, there is a "provisionator" user, uid/gid 769,
         #  that is who we should start as, unless we are running sudoless.
@@ -92,6 +93,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             super().auth_state_hook(spawner, auth_state)
         else:
             self.log.debug("No superclass auth_state_hook to call.")
+        self.log.debug("Updating cached auth_state.")
+        self.cached_auth_state = auth_state
 
     @gen.coroutine
     def get_options_form(self):
@@ -115,7 +118,11 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         om = lm.optionsform_mgr
         self.log.debug("Requesting auth state")
         user = self.user
-        auth_state = yield user.get_auth_state()
+        auth_state = self.cached_auth_state
+        if not auth_state:
+            self.log.info("No cached_auth_state(); reacquiring.")
+            auth_state = yield user.get_auth_state()
+            self.cached_auth_state = auth_state
         if not auth_state:
             raise ValueError(
                 "Auth state empty for user {}".format(self.user))
@@ -132,7 +139,6 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                 raise RuntimeError(errstr)
         self.log.debug("Requesting options_form from manager.")
         form = yield self.asynchronize(om.get_options_form)
-        self.log.debug("Form received: {}".format(form))
         return form
 
     def set_user_namespace(self):
@@ -157,18 +163,23 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             return "{}-{}".format(defname, self.user.escaped_name)
 
     def start(self):
-        with start_action(action_type="start"):
-            # All we need to do is ensure the namespace and K8s ancillary
-            #  resources before we run the superclass method to spawn a pod,
-            #  so we have the namespace to spawn into, and the service account
-            #  with appropriate roles and rolebindings.
-            self.log.debug("Starting; creating namespace/ancillary objects.")
-            self.log.debug(
-                "User name in start() is '{}'.".format(self._log_name))
-            self.set_user_namespace()  # Set namespace here/in namespace_mgr
-            self.lsst_mgr.ensure_resources()
-            retval = super().start()
-            return retval
+        """Thin wrapper around self._start
+
+        so we can hold onto a reference for the Future
+        start returns, which we can use to terminate
+        .progress()
+        """
+        self._start_future = self._start()
+        return self._start_future
+
+    @gen.coroutine
+    def _start(self):
+        # Update our cached auth state on every _start call
+        ast = yield self.user.get_auth_state()
+        self.cached_auth_state = ast
+        self.log.debug("Refreshed cached_auth_state in _start().")
+        retval = yield super()._start()
+        return retval
 
     @gen.coroutine
     def stop(self, now=False):
@@ -205,8 +216,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     @gen.coroutine
     def _get_user_env(self):
         # Get authentication-session-specific variables for the pod env
-        user = self.user
-        ast = yield user.get_auth_state()
+        ast = self.cached_auth_state
         # Crash if any of this isn't set
         uid = ast['uid']
         claims = ast['claims']
@@ -236,6 +246,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         if ctrs and len(ctrs) > 0:
             cmd = ctrs[0].args or ctrs[0].command
         # That should be it from the standard get_pod_manifest
+        # We assume that self.cached_auth_state is populated by the time
+        #  we get here.
         # Now we finally need all that data we have been managing.
         # Add label and annotations for ArgoCD management.
         labels['argocd.argoproj.io/instance'] = 'nublado-users'
@@ -383,7 +395,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # Check to see if we're running without sudo
         if cfg.lab_no_sudo:
             pod_env['NO_SUDO'] = "TRUE"
-            ast = yield self.user.get_auth_state()
+            ast = self.cached_auth_state
             uid = int(ast['uid'])
             self.uid = uid  # Run directly as user
             self.gid = uid  # (with private group)
@@ -391,8 +403,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             strict_ldap = self.lsst_mgr.config.strict_ldap_groups
             self.supplemental_gids = get_supplemental_gids(claims,
                                                            strict_ldap)
+        self.set_user_namespace()
+        daskconfig = None
         if cfg.allow_dask_spawn:
-            ast = yield self.user.get_auth_state()
+            ast = self.cached_auth_state
             daskconfig = {
                 "debug": enable_debug,
                 "image": self.image,
@@ -409,11 +423,13 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                 },
                 "auth_state": ast
             }
-            nm.ensure_dask_configmap(daskconfig)
         self.log.debug("Pod environment: {}".format(json.dumps(
             sanitized_env,
             sort_keys=True,
             indent=4)))
+        # This is the part that actually makes the K8s resources.
+        nm.ensure_namespace(namespace=self.namespace,
+                            daskconfig=daskconfig)
         self.log.debug("About to run make_pod()")
         pod = make_pod(
             name=self.pod_name,
