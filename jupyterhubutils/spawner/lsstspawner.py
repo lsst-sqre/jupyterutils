@@ -117,7 +117,11 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         om = lm.optionsform_mgr
         self.log.debug("Requesting auth state")
         user = self.user
-        auth_state = yield user.get_auth_state()
+        auth_state = self.cached_auth_state
+        if not auth_state:
+            self.log.info("No cached_auth_state(); reacquiring.")
+            auth_state = yield user.get_auth_state()
+            self.cached_auth_state = auth_state
         if not auth_state:
             raise ValueError(
                 "Auth state empty for user {}".format(self.user))
@@ -160,9 +164,10 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
 
     @gen.coroutine
     def _start(self):
-        # Update our cached auth state
+        # Update our cached auth state on every _start call
         ast = yield self.user.get_auth_state()
         self.cached_auth_state = ast
+        self.log.debug("Refreshed cached_auth_state.")
         super()._start()
 
     @gen.coroutine
@@ -200,8 +205,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
     @gen.coroutine
     def _get_user_env(self):
         # Get authentication-session-specific variables for the pod env
-        user = self.user
-        ast = yield user.get_auth_state()
+        ast = self.cached_auth_state
         # Crash if any of this isn't set
         uid = ast['uid']
         claims = ast['claims']
@@ -231,6 +235,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         if ctrs and len(ctrs) > 0:
             cmd = ctrs[0].args or ctrs[0].command
         # That should be it from the standard get_pod_manifest
+        # We assume that self.cached_auth_state is populated by the time
+        #  we get here.
         # Now we finally need all that data we have been managing.
         # Add label and annotations for ArgoCD management.
         labels['argocd.argoproj.io/instance'] = 'nublado-users'
@@ -378,7 +384,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # Check to see if we're running without sudo
         if cfg.lab_no_sudo:
             pod_env['NO_SUDO'] = "TRUE"
-            ast = yield self.user.get_auth_state()
+            ast = self.cached_auth_state
             uid = int(ast['uid'])
             self.uid = uid  # Run directly as user
             self.gid = uid  # (with private group)
@@ -389,7 +395,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         self.set_user_namespace()
         daskconfig = None
         if cfg.allow_dask_spawn:
-            ast = yield self.user.get_auth_state()
+            ast = self.cached_auth_state
             daskconfig = {
                 "debug": enable_debug,
                 "image": self.image,
