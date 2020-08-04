@@ -61,6 +61,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                                           user=user,
                                           config=LSSTConfig())
         self.log.debug("Initialized {}".format(__name__))
+        self.cached_auth_state = {}
         self.delete_grace_period = 5
         # In our LSST setup, there is a "provisionator" user, uid/gid 769,
         #  that is who we should start as, unless we are running sudoless.
