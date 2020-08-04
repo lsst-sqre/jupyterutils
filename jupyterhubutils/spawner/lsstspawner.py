@@ -168,8 +168,9 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         # Update our cached auth state on every _start call
         ast = yield self.user.get_auth_state()
         self.cached_auth_state = ast
-        self.log.debug("Refreshed cached_auth_state.")
-        super()._start()
+        self.log.debug("Refreshed cached_auth_state in _start().")
+        yield super()._start()
+        return
 
     @gen.coroutine
     def stop(self, now=False):
