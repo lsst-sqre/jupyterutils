@@ -162,13 +162,23 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                 raise ValueError("Won't spawn into default namespace!")
             return "{}-{}".format(defname, self.user.escaped_name)
 
+    def start(self):
+        """Thin wrapper around self._start
+
+        so we can hold onto a reference for the Future
+        start returns, which we can use to terminate
+        .progress()
+        """
+        self._start_future = self._start()
+        return self._start_future
+
     @gen.coroutine
     def _start(self):
         # Update our cached auth state on every _start call
         ast = yield self.user.get_auth_state()
         self.cached_auth_state = ast
         self.log.debug("Refreshed cached_auth_state in _start().")
-        retval = super()._start()
+        retval = yield super()._start()
         return retval
 
     @gen.coroutine
