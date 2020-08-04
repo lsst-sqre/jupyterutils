@@ -59,7 +59,6 @@ class LSSTAuthenticator(Authenticator):
             self.log.debug("Returned from superclass's refresh_user().")
             self.log.debug("Clearing form data for '{}'.".format(uname))
             self.lsst_mgr.optionsform_mgr.options_form_data = None
-            self.log.debug("Adding uid and groupmap to auth_state.")
             self.log.debug(
                 "Finished lsstauth refresh_user for '{}'".format(uname))
             return retval

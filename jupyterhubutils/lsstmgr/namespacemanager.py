@@ -215,14 +215,16 @@ class LSSTNamespaceManager(LoggableChild):
         '''
         with start_action(action_type="def_lab_config_maps"):
             cfg = self.parent.config
-            auth = self.parent.authenticator
-            # This is a terrible way to get around the fact that
-            # accessing auth_state is an async function and we get into a
-            # horrific inception situation if we try to add async to the
-            # current manager framework.
-            ast = auth.cached_auth_state
+            # This is a sort of gross way to get around the fact that
+            # accessing auth_state is an async function but wfdispatcher,
+            # which also uses this method, is not an async framework.
+            #
+            # Since the spawner is a per-session object, it can hold a
+            #  cached auth state which shouldn't change during a spawning
+            #  session.
+            ast = self.parent.spawner.cached_auth_state
             if not ast:
-                errstr = "Authenticator has no cached_auth_state!"
+                errstr = "Spawner has no cached_auth_state!"
                 self.log.error(errstr)
                 raise RuntimeError(errstr)
             uname = ast['claims']['uid']

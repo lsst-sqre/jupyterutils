@@ -92,6 +92,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             super().auth_state_hook(spawner, auth_state)
         else:
             self.log.debug("No superclass auth_state_hook to call.")
+        self.log.debug("Updating cached auth_state.")
+        self.cached_auth_state = auth_state
 
     @gen.coroutine
     def get_options_form(self):
@@ -155,6 +157,13 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
             if defname == "default":
                 raise ValueError("Won't spawn into default namespace!")
             return "{}-{}".format(defname, self.user.escaped_name)
+
+    @gen.coroutine
+    def _start(self):
+        # Update our cached auth state
+        ast = yield self.user.get_auth_state()
+        self.cached_auth_state = ast
+        super()._start()
 
     @gen.coroutine
     def stop(self, now=False):

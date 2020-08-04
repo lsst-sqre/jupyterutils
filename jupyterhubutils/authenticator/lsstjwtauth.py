@@ -68,5 +68,4 @@ class LSSTJWTAuthenticator(LSSTAuthenticator, JSONWebTokenAuthenticator):
             ast['uid'] = claims['uidNumber']
             ast['group_map'] = resolve_groups(claims, strict_ldap)
             await user.save_auth_state(ast)
-            self.cached_auth_state = ast  # For ease of synchronous access
             return ast
