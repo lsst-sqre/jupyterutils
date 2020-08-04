@@ -139,7 +139,6 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                 raise RuntimeError(errstr)
         self.log.debug("Requesting options_form from manager.")
         form = yield self.asynchronize(om.get_options_form)
-        self.log.debug("Form received: {}".format(form))
         return form
 
     def set_user_namespace(self):
@@ -169,8 +168,8 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
         ast = yield self.user.get_auth_state()
         self.cached_auth_state = ast
         self.log.debug("Refreshed cached_auth_state in _start().")
-        yield super()._start()
-        return
+        retval = super()._start()
+        return retval
 
     @gen.coroutine
     def stop(self, now=False):
