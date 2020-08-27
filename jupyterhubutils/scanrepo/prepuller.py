@@ -124,7 +124,9 @@ class Prepuller(object):
                                      json=True, insecure=self.args.insecure,
                                      sort_field=self.args.sort,
                                      cachefile=self.cachefile,
-                                     debug=self.args.debug)
+                                     debug=self.args.debug,
+                                     username=self.args.username,
+                                     password=self.args.password)
             if not self.args.no_scan:
                 if self.args.repo:
                     self.logger.debug("Scanning images: '%s' " %

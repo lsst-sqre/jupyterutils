@@ -162,6 +162,8 @@ class LSSTConfig(metaclass=Singleton):
         self.lab_repo_owner = os.getenv('LAB_REPO_OWNER') or 'lsstsqre'
         self.lab_repo_name = os.getenv('LAB_REPO_NAME') or 'sciplat-lab'
         self.lab_repo_host = os.getenv('LAB_REPO_HOST') or 'hub.docker.com'
+        self.lab_repo_username = os.getenv('LAB_REPO_USERNAME', None)
+        self.lab_repo_password = os.getenv('LAB_REPO_PASSWORD', None)
         self.prepuller_namespace = (os.getenv('PREPULLER_NAMESPACE') or
                                     get_execution_namespace())
         self.prepuller_experimentals = intify(

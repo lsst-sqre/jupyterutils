@@ -49,6 +49,12 @@ def parse_args(cfg=LSSTConfig(),
         parser.add_argument("-o", "--owner", "--organization", "--org",
                             help="repository owner [{}]".format(lro),
                             default=lro)
+        parser.add_argument("--username",
+                            help="Docker username",
+                            default=cfg.lab_repo_username)
+        parser.add_argument("--password",
+                            help="Docker password",
+                            default=cfg.lab_repo_password)
         parser.add_argument("-n", "--name",
                             help="repository name [{}]".format(lrn),
                             default=lrn)
