@@ -4,6 +4,7 @@
 import json
 import time
 import yaml
+from base64 import base64
 from eliot import start_action
 from kubernetes.client.rest import ApiException
 from kubernetes import client
@@ -98,7 +99,21 @@ class LSSTNamespaceManager(LoggableChild):
                     acd + 'sync-options': 'Prune=false',
                 }
             )
-            svcacct = client.V1ServiceAccount(metadata=md)
+
+            cfg = self.parent.config
+            data = {
+              "auths": {
+                cfg.lab_repo_host {
+                  "username": cfg.lab_repo_username,
+                  "password": cfg.lab_repo_password,
+                  "auth": base64.b64encode('{}:{}'.format(cfg.lab_repo_username, cfg.lab_repo_password).encode('ascii'))
+                }
+              }
+            }
+            pull_secret = client.V1Secret(name='pull_secret', body=data)
+            pull_secret_ref = client.V1LocalObjectReference(name='pull_secret')
+
+            svcacct = client.V1ServiceAccount(metadata=md, image_pull_secrets=pull_secret_ref)
             # These rules let us manipulate Dask pods, Argo Workflows, and
             #  Multus CNI interfaces
             rules = [
@@ -145,7 +160,7 @@ class LSSTNamespaceManager(LoggableChild):
                     name=account,
                     namespace=namespace)]
             )
-            return svcacct, role, rolebinding
+            return pull_secret, svcacct, role, rolebinding
 
     def ensure_namespaced_service_account(self):
         '''Create a service account with role and rolebinding to allow it
@@ -156,8 +171,26 @@ class LSSTNamespaceManager(LoggableChild):
             namespace = self.namespace
             api = self.parent.api
             rbac_api = self.parent.rbac_api
-            svcacct, role, rolebinding = self.def_namespaced_account_objects()
+            pull_secret, svcacct, role, rolebinding = self.def_namespaced_account_objects()
             account = self.service_account
+
+            try:
+                self.log.info("Attempting to create pull secret.")
+                api.create_namespaced_secret(
+                    namespace=namespace,
+                    body=pull_secret)
+            except ApiException as e:
+                if e.status != 409:
+                    self.log.exception(("Create pull secret '{}' " +
+                                        "in namespace '{}' " +
+                                        "failed: '{}").format(account,
+                                                              namespace, e))
+                    raise
+                else:
+                    self.log.info(("Pull secret '{}' " +
+                                   "in namespace '{}' " +
+                                   "already exists.").format(account,
+                                                             namespace))
             try:
                 self.log.info("Attempting to create service account.")
                 api.create_namespaced_service_account(
