@@ -110,7 +110,11 @@ class LSSTNamespaceManager(LoggableChild):
                 }
               }
             }
-            pull_secret = client.V1Secret(name='pull_secret', body=data)
+            pull_secret = client.V1Secret()
+            pull_secret.metadata = client.V1ObjectMeta(name='pull_secret')
+            pull_secret.type = "kubernetes.io/dockerconfigjson"
+            pull_secret.data = {".dockerconfigjson": base64.b64encode(data)}
+
             pull_secret_ref = client.V1LocalObjectReference(name='pull_secret')
 
             svcacct = client.V1ServiceAccount(metadata=md, image_pull_secrets=pull_secret_ref)
