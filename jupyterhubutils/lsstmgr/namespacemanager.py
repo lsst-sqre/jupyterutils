@@ -1,10 +1,10 @@
 '''Class to provide namespace manipulation.
 '''
 
+import base64
 import json
 import time
 import yaml
-from base64 import base64
 from eliot import start_action
 from kubernetes.client.rest import ApiException
 from kubernetes import client
