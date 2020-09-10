@@ -103,7 +103,7 @@ class LSSTNamespaceManager(LoggableChild):
             cfg = self.parent.config
             data = {
               "auths": {
-                cfg.lab_repo_host {
+                cfg.lab_repo_host: {
                   "username": cfg.lab_repo_username,
                   "password": cfg.lab_repo_password,
                   "auth": base64.b64encode('{}:{}'.format(cfg.lab_repo_username, cfg.lab_repo_password).encode('ascii'))
