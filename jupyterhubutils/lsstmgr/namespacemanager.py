@@ -101,21 +101,24 @@ class LSSTNamespaceManager(LoggableChild):
             )
 
             cfg = self.parent.config
-            data = {
+            basic_auth = '{}:{}'.format(cfg.lab_repo_username, cfg.lab_repo_password).encode('utf-8')
+            authdata = {
               "auths": {
                 cfg.lab_repo_host: {
                   "username": cfg.lab_repo_username,
                   "password": cfg.lab_repo_password,
-                  "auth": base64.b64encode('{}:{}'.format(cfg.lab_repo_username, cfg.lab_repo_password).encode('ascii'))
+                  "auth": base64.b64encode(basic_auth).decode('utf-8')
                 }
               }
             }
-            pull_secret = client.V1Secret()
-            pull_secret.metadata = client.V1ObjectMeta(name='pull_secret')
-            pull_secret.type = "kubernetes.io/dockerconfigjson"
-            pull_secret.data = {".dockerconfigjson": base64.b64encode(data)}
 
-            pull_secret_ref = client.V1LocalObjectReference(name='pull_secret')
+            b64authdata = base64.b64encode(json.dumps(authdata).encode('utf-8')).decode('utf-8')
+            pull_secret = client.V1Secret()
+            pull_secret.metadata = client.V1ObjectMeta(name='pull-secret')
+            pull_secret.type = "kubernetes.io/dockerconfigjson"
+            pull_secret.data = {".dockerconfigjson": b64authdata}
+
+            pull_secret_ref = client.V1LocalObjectReference(name='pull-secret')
 
             svcacct = client.V1ServiceAccount(metadata=md, image_pull_secrets=pull_secret_ref)
             # These rules let us manipulate Dask pods, Argo Workflows, and
