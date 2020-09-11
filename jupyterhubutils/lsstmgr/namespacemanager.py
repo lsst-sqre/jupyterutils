@@ -120,7 +120,7 @@ class LSSTNamespaceManager(LoggableChild):
 
             pull_secret_ref = client.V1LocalObjectReference(name='pull-secret')
 
-            svcacct = client.V1ServiceAccount(metadata=md, image_pull_secrets=pull_secret_ref)
+            svcacct = client.V1ServiceAccount(metadata=md, image_pull_secrets=[pull_secret_ref])
             # These rules let us manipulate Dask pods, Argo Workflows, and
             #  Multus CNI interfaces
             rules = [
