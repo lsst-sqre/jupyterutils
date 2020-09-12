@@ -523,6 +523,10 @@ class LSSTNamespaceManager(LoggableChild):
             clear_to_delete = True
             if podlist and podlist.items:
                 clear_to_delete = self._check_pods(podlist.items)
+
+            # DELETE THIS LINE FIXME BUG BUG BUG this is just a hack to see
+            # what pod got created, if any.
+            clear_to_delete = False
             if not clear_to_delete:
                 self.log.info("Not deleting namespace '%s'" % namespace)
                 return False
