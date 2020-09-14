@@ -344,7 +344,7 @@ class LSSTSpawner(MultiNamespacedKubeSpawner):
                         tag = cit
                         image = imgname + ":" + cit
             self.log.debug("Replacing image from options form: %s" % image)
-            self.image = image
+            self.image = cfg.lab_repo_host + "/" + image
             pod_env['JUPYTER_IMAGE_SPEC'] = image
             pod_env['JUPYTER_IMAGE'] = image
         # Set flag to clear .local if indicated
